@@ -33,8 +33,39 @@ class RssService {
       }
     }
 
+    // 섹션에서 기사가 없는 종목은 키워드 검색(7일치)으로 폴백
+    final stocksWithArticles = allItems.map((n) => n.stockName).toSet();
+    for (final stock in stocks) {
+      if (stocksWithArticles.contains(stock.name)) continue;
+      for (final keyword in stock.keywords) {
+        final items = await _fetchByKeyword(keyword, stock.name);
+        for (final item in items) {
+          if (seenLinks.add(item.link)) {
+            allItems.add(item);
+          }
+        }
+      }
+    }
+
     allItems.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
     return allItems;
+  }
+
+  static Future<List<NewsItem>> _fetchByKeyword(
+    String keyword,
+    String stockName,
+  ) async {
+    final encodedKeyword = Uri.encodeComponent(keyword);
+    final url =
+        'https://news.google.com/rss/search?q=$encodedKeyword+when:7d&hl=ko&gl=KR&ceid=KR:ko';
+    try {
+      final response =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) return [];
+      return _parseRss(response.body, '', [Stock(name: stockName, keywords: [keyword])]);
+    } catch (_) {
+      return [];
+    }
   }
 
   static Future<List<NewsItem>> _fetchBySection(
