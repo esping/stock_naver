@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/stock.dart';
 import '../services/storage_service.dart';
+import '../services/rss_service.dart';
 
 class KeywordScreen extends StatefulWidget {
   const KeywordScreen({super.key});
@@ -12,8 +13,7 @@ class KeywordScreen extends StatefulWidget {
 class _KeywordScreenState extends State<KeywordScreen> {
   List<Stock> _stocks = [];
   Set<String> _allowedSources = {};
-  Set<String> _discoveredCategories = {};
-  Set<String> _excludedCategories = {};
+  Set<String> _enabledSections = {};
 
   @override
   void initState() {
@@ -24,13 +24,11 @@ class _KeywordScreenState extends State<KeywordScreen> {
   Future<void> _load() async {
     final stocks = await StorageService.loadStocks();
     final allowed = await StorageService.loadAllowedSources();
-    final discoveredCat = await StorageService.loadDiscoveredCategories();
-    final excludedCat = await StorageService.loadExcludedCategories();
+    final sections = await StorageService.loadEnabledSections();
     setState(() {
       _stocks = stocks;
       _allowedSources = allowed;
-      _discoveredCategories = discoveredCat;
-      _excludedCategories = excludedCat;
+      _enabledSections = sections;
     });
   }
 
@@ -188,17 +186,17 @@ class _KeywordScreenState extends State<KeywordScreen> {
     );
   }
 
-  // ── 카테고리 관련 ─────────────────────────────────────
+  // ── 섹션 관련 ─────────────────────────────────────────
 
-  void _toggleExcludeCategory(String category) {
+  void _toggleSection(String sectionKey) {
     setState(() {
-      if (_excludedCategories.contains(category)) {
-        _excludedCategories.remove(category);
+      if (_enabledSections.contains(sectionKey)) {
+        _enabledSections.remove(sectionKey);
       } else {
-        _excludedCategories.add(category);
+        _enabledSections.add(sectionKey);
       }
     });
-    StorageService.saveExcludedCategories(_excludedCategories);
+    StorageService.saveEnabledSections(_enabledSections);
   }
 
   // ── UI ───────────────────────────────────────────────
@@ -209,6 +207,40 @@ class _KeywordScreenState extends State<KeywordScreen> {
       appBar: AppBar(title: const Text('설정')),
       body: ListView(
         children: [
+          // 섹션 선택 섹션
+          Card(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: ExpansionTile(
+              initiallyExpanded: true,
+              title: const Text('뉴스 섹션', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                _enabledSections.isEmpty
+                    ? '섹션을 선택하면 해당 섹션 기사를 수집합니다'
+                    : '${_enabledSections.length}개 섹션 수집 중',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Text(
+                    '선택한 섹션에서 종목 키워드가 포함된 기사를 수집합니다.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ),
+                ...kGoogleNewsSections.entries.map((entry) {
+                  final isEnabled = _enabledSections.contains(entry.key);
+                  return CheckboxListTile(
+                    dense: true,
+                    value: isEnabled,
+                    activeColor: Colors.indigo,
+                    title: Text(entry.value),
+                    onChanged: (_) => _toggleSection(entry.key),
+                  );
+                }),
+              ],
+            ),
+          ),
+
           // 언론사 관리 섹션 (화이트리스트)
           Card(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -245,55 +277,6 @@ class _KeywordScreenState extends State<KeywordScreen> {
                   title: const Text('언론사 추가', style: TextStyle(color: Colors.indigo)),
                   onTap: _showAddSourceDialog,
                 ),
-              ],
-            ),
-          ),
-
-          // 카테고리 관리 섹션
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: ExpansionTile(
-              title: const Text('카테고리 관리', style: TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(
-                _discoveredCategories.isEmpty
-                    ? '뉴스 수집 후 자동으로 목록이 채워집니다'
-                    : '${_discoveredCategories.length}개 발견 · ${_excludedCategories.length}개 제외 중',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              children: [
-                if (_discoveredCategories.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      '새로고침으로 뉴스를 수집하면\n카테고리 목록이 자동으로 나타납니다.',
-                      style: TextStyle(fontSize: 13, color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  )
-                else
-                  ...(_discoveredCategories.toList()..sort()).map((category) {
-                    final isExcluded = _excludedCategories.contains(category);
-                    return ListTile(
-                      dense: true,
-                      leading: Icon(
-                        Icons.label_outline,
-                        size: 18,
-                        color: isExcluded ? Colors.grey : Colors.indigo,
-                      ),
-                      title: Text(
-                        category,
-                        style: TextStyle(
-                          color: isExcluded ? Colors.grey : null,
-                          decoration: isExcluded ? TextDecoration.lineThrough : null,
-                        ),
-                      ),
-                      trailing: Switch(
-                        value: !isExcluded,
-                        activeColor: Colors.indigo,
-                        onChanged: (_) => _toggleExcludeCategory(category),
-                      ),
-                    );
-                  }),
               ],
             ),
           ),

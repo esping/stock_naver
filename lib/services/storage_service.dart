@@ -6,9 +6,8 @@ import '../models/news_item.dart';
 class StorageService {
   static const _stocksKey = 'stocks';
   static const _newsKey = 'news';
-  static const _allowedSourcesKey = 'allowed_sources';             // 허용 언론사 (화이트리스트)
-  static const _discoveredCategoriesKey = 'discovered_categories'; // 수집된 카테고리 전체
-  static const _excludedCategoriesKey = 'excluded_categories';     // 제외할 카테고리
+  static const _allowedSourcesKey = 'allowed_sources';   // 허용 언론사 (화이트리스트)
+  static const _enabledSectionsKey = 'enabled_sections'; // 수집할 섹션
 
   // 종목 목록 불러오기
   static Future<List<Stock>> loadStocks() async {
@@ -55,40 +54,27 @@ class StorageService {
     await prefs.setStringList(_allowedSourcesKey, sources.toList());
   }
 
-  // ── 카테고리 관련 ─────────────────────────────────────
+  // ── 섹션 관련 ─────────────────────────────────────────
 
-  // 수집 중 발견된 카테고리 전체 목록 (자동 누적)
-  static Future<Set<String>> loadDiscoveredCategories() async {
+  // 수집할 섹션 목록 (기본: BUSINESS, TECHNOLOGY)
+  static Future<Set<String>> loadEnabledSections() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_discoveredCategoriesKey)?.toSet() ?? {};
+    final saved = prefs.getStringList(_enabledSectionsKey);
+    if (saved == null) return {'BUSINESS', 'TECHNOLOGY'};
+    return saved.toSet();
   }
 
-  // 수집 시 발견된 카테고리 추가 (누적)
-  static Future<void> addDiscoveredCategories(Iterable<String> categories) async {
+  // 수집할 섹션 저장
+  static Future<void> saveEnabledSections(Set<String> sections) async {
     final prefs = await SharedPreferences.getInstance();
-    final discovered = prefs.getStringList(_discoveredCategoriesKey)?.toSet() ?? {};
-    discovered.addAll(categories.where((c) => c.isNotEmpty));
-    await prefs.setStringList(_discoveredCategoriesKey, discovered.toList());
+    await prefs.setStringList(_enabledSectionsKey, sections.toList());
   }
 
-  // 제외할 카테고리 불러오기
-  static Future<Set<String>> loadExcludedCategories() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_excludedCategoriesKey)?.toSet() ?? {};
-  }
-
-  // 제외할 카테고리 저장
-  static Future<void> saveExcludedCategories(Set<String> categories) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_excludedCategoriesKey, categories.toList());
-  }
-
-  // 새 뉴스와 기존 뉴스 병합: 중복 제거 + 30일 이내 + 언론사 화이트리스트 + 카테고리 블랙리스트
+  // 새 뉴스와 기존 뉴스 병합: 중복 제거 + 30일 이내 + 언론사 화이트리스트
   static List<NewsItem> mergeAndFilter(
     List<NewsItem> fresh,
     List<NewsItem> prev, {
-    Set<String> allowedSources = const {},   // 비어있으면 전체 허용
-    Set<String> excludedCategories = const {},
+    Set<String> allowedSources = const {}, // 비어있으면 전체 허용
   }) {
     final cutoff = DateTime.now().subtract(const Duration(days: 30));
     final seenLinks = <String>{};
@@ -97,7 +83,6 @@ class StorageService {
           if (!seenLinks.add(n.link)) return false;
           if (!n.publishedAt.isAfter(cutoff)) return false;
           if (allowedSources.isNotEmpty && !allowedSources.contains(n.source)) return false;
-          if (n.category.isNotEmpty && excludedCategories.contains(n.category)) return false;
           return true;
         })
         .toList()

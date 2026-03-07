@@ -3,19 +3,32 @@ import 'package:xml/xml.dart';
 import '../models/news_item.dart';
 import '../models/stock.dart';
 
+// 제공 섹션 목록 (key → 한국어 표시명)
+const Map<String, String> kGoogleNewsSections = {
+  'BUSINESS': '비즈니스',
+  'TECHNOLOGY': 'IT·과학',
+  'NATION': '국내',
+  'WORLD': '세계',
+  'ENTERTAINMENT': '연예',
+  'SPORTS': '스포츠',
+};
+
 class RssService {
-  // 항상 1일치 수집
-  static Future<List<NewsItem>> fetchAllNews(List<Stock> stocks) async {
+  static Future<List<NewsItem>> fetchAllNews(
+    List<Stock> stocks, {
+    Set<String> enabledSections = const {},
+  }) async {
+    if (stocks.isEmpty || enabledSections.isEmpty) return [];
+
     final allItems = <NewsItem>[];
     final seenLinks = <String>{};
 
-    for (final stock in stocks) {
-      for (final keyword in stock.keywords) {
-        final items = await _fetchByKeyword(keyword, stock.name);
-        for (final item in items) {
-          if (seenLinks.add(item.link)) {
-            allItems.add(item);
-          }
+    for (final sectionKey in enabledSections) {
+      final sectionName = kGoogleNewsSections[sectionKey] ?? sectionKey;
+      final items = await _fetchBySection(sectionKey, sectionName, stocks);
+      for (final item in items) {
+        if (seenLinks.add(item.link)) {
+          allItems.add(item);
         }
       }
     }
@@ -24,23 +37,29 @@ class RssService {
     return allItems;
   }
 
-  static Future<List<NewsItem>> _fetchByKeyword(
-    String keyword,
-    String stockName,
+  static Future<List<NewsItem>> _fetchBySection(
+    String sectionKey,
+    String sectionName,
+    List<Stock> stocks,
   ) async {
-    final encodedKeyword = Uri.encodeComponent(keyword);
-    final url = 'https://news.google.com/rss/search?q=$encodedKeyword+when:1d&hl=ko&gl=KR&ceid=KR:ko';
+    final url =
+        'https://news.google.com/rss/headlines/section/topic/$sectionKey?hl=ko&gl=KR&ceid=KR:ko';
 
     try {
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      final response =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
       if (response.statusCode != 200) return [];
-      return _parseRss(response.body, stockName);
+      return _parseRss(response.body, sectionName, stocks);
     } catch (_) {
       return [];
     }
   }
 
-  static List<NewsItem> _parseRss(String xmlBody, String stockName) {
+  static List<NewsItem> _parseRss(
+    String xmlBody,
+    String sectionName,
+    List<Stock> stocks,
+  ) {
     final items = <NewsItem>[];
     try {
       final document = XmlDocument.parse(xmlBody);
@@ -49,20 +68,29 @@ class RssService {
       for (final entry in entries) {
         final title = entry.findElements('title').firstOrNull?.innerText ?? '';
         final link = entry.findElements('link').firstOrNull?.innerText ?? '';
-        final pubDate = entry.findElements('pubDate').firstOrNull?.innerText ?? '';
-        final source = entry.findElements('source').firstOrNull?.innerText ?? '';
-        final category = entry.findElements('category').firstOrNull?.innerText ?? '';
+        final pubDate =
+            entry.findElements('pubDate').firstOrNull?.innerText ?? '';
+        final source =
+            entry.findElements('source').firstOrNull?.innerText ?? '';
 
         if (title.isEmpty || link.isEmpty) continue;
 
-        items.add(NewsItem(
-          title: title,
-          link: link,
-          source: source,
-          category: category,
-          publishedAt: _parseDate(pubDate),
-          stockName: stockName,
-        ));
+        final publishedAt = _parseDate(pubDate);
+
+        // 어떤 종목 키워드가 제목에 포함되는지 확인
+        for (final stock in stocks) {
+          final matched = stock.keywords.any((kw) => title.contains(kw));
+          if (matched) {
+            items.add(NewsItem(
+              title: title,
+              link: link,
+              source: source,
+              section: sectionName,
+              publishedAt: publishedAt,
+              stockName: stock.name,
+            ));
+          }
+        }
       }
     } catch (_) {}
     return items;

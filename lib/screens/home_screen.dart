@@ -56,25 +56,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final stocks = await StorageService.loadStocks();
     final prevNews = await StorageService.loadNews();
-    final prevLinks = prevNews.map((n) => n.link).toSet();
+    final prevTitles = prevNews.map((n) => n.title).toSet();
 
-    final freshNews = await RssService.fetchAllNews(stocks);
-
-    // 카테고리 누적 저장
-    final categoriesInFresh = freshNews.map((n) => n.category).where((c) => c.isNotEmpty).toSet();
-    await StorageService.addDiscoveredCategories(categoriesInFresh);
+    final enabledSections = await StorageService.loadEnabledSections();
+    final freshNews = await RssService.fetchAllNews(stocks, enabledSections: enabledSections);
 
     final allowedSources = await StorageService.loadAllowedSources();
-    final excludedCategories = await StorageService.loadExcludedCategories();
     final mergedNews = StorageService.mergeAndFilter(
       freshNews, prevNews,
       allowedSources: allowedSources,
-      excludedCategories: excludedCategories,
     );
     await StorageService.saveNews(mergedNews);
 
     // 새 기사 집계 후 통합 알림 1건
-    final newArticles = freshNews.where((n) => !prevLinks.contains(n.link)).toList();
+    final newArticles = freshNews.where((n) => !prevTitles.contains(n.title)).toList();
     final newKeywordCount = stocks
         .where((s) => newArticles.any((n) => n.stockName == s.name))
         .length;
@@ -159,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     title: Text(item.title,
                         style: const TextStyle(fontSize: 14)),
                     subtitle: Text(
-                      '${item.source}  ·  ${_formatTime(item.publishedAt)}',
+                      '${item.section.isNotEmpty ? '[${item.section}]  ' : ''}${item.source}  ·  ${_formatTime(item.publishedAt)}',
                       style: const TextStyle(
                           fontSize: 12, color: Colors.grey),
                     ),
