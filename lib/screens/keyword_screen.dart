@@ -14,6 +14,7 @@ class _KeywordScreenState extends State<KeywordScreen> {
   List<Stock> _stocks = [];
   Set<String> _allowedSources = {};
   Set<String> _enabledSections = {};
+  bool _newStockAdded = false;
 
   @override
   void initState() {
@@ -100,7 +101,10 @@ class _KeywordScreenState extends State<KeywordScreen> {
           onSubmitted: (v) {
             final name = v.trim();
             if (name.isEmpty) return;
-            setState(() => _stocks.add(Stock(name: name, keywords: [name])));
+            setState(() {
+              _stocks.add(Stock(name: name, keywords: [name]));
+              _newStockAdded = true;
+            });
             _save();
             Navigator.pop(ctx);
           },
@@ -111,7 +115,10 @@ class _KeywordScreenState extends State<KeywordScreen> {
             onPressed: () {
               final name = nameCtrl.text.trim();
               if (name.isEmpty) return;
-              setState(() => _stocks.add(Stock(name: name, keywords: [name])));
+              setState(() {
+                _stocks.add(Stock(name: name, keywords: [name]));
+                _newStockAdded = true;
+              });
               _save();
               Navigator.pop(ctx);
             },
@@ -203,8 +210,19 @@ class _KeywordScreenState extends State<KeywordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('설정')),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) Navigator.pop(context, _newStockAdded);
+      },
+      child: Scaffold(
+      appBar: AppBar(
+        title: const Text('설정'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context, _newStockAdded),
+        ),
+      ),
       body: ListView(
         children: [
           // 섹션 선택 섹션
@@ -329,6 +347,7 @@ class _KeywordScreenState extends State<KeywordScreen> {
         onPressed: _showAddStockDialog,
         child: const Icon(Icons.add),
       ),
+    ),
     );
   }
 }

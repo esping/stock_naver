@@ -253,9 +253,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () async {
-              await Navigator.push(context,
+              final newStockAdded = await Navigator.push<bool>(context,
                   MaterialPageRoute(builder: (_) => const KeywordScreen()));
-              _loadData();
+              if (newStockAdded == true) {
+                _refresh();
+              } else {
+                _loadData();
+              }
             },
           ),
           IconButton(

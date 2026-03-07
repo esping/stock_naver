@@ -11,6 +11,8 @@ const Map<String, String> kGoogleNewsSections = {
   'WORLD': '세계',
   'ENTERTAINMENT': '연예',
   'SPORTS': '스포츠',
+  'SCIENCE': '과학',
+  'HEALTH': '건강',
 };
 
 class RssService {
