@@ -60,17 +60,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final freshNews = await RssService.fetchAllNews(stocks);
 
-    // 발견된 언론사·카테고리 누적 저장
-    final sourcesInFresh = freshNews.map((n) => n.source).toSet();
-    await StorageService.addDiscoveredSources(sourcesInFresh);
+    // 카테고리 누적 저장
     final categoriesInFresh = freshNews.map((n) => n.category).where((c) => c.isNotEmpty).toSet();
     await StorageService.addDiscoveredCategories(categoriesInFresh);
 
-    final excludedSources = await StorageService.loadExcludedSources();
+    final allowedSources = await StorageService.loadAllowedSources();
     final excludedCategories = await StorageService.loadExcludedCategories();
     final mergedNews = StorageService.mergeAndFilter(
       freshNews, prevNews,
-      excludedSources: excludedSources,
+      allowedSources: allowedSources,
       excludedCategories: excludedCategories,
     );
     await StorageService.saveNews(mergedNews);

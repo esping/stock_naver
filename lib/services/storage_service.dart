@@ -6,8 +6,7 @@ import '../models/news_item.dart';
 class StorageService {
   static const _stocksKey = 'stocks';
   static const _newsKey = 'news';
-  static const _discoveredSourcesKey = 'discovered_sources';     // 수집된 언론사 전체
-  static const _excludedSourcesKey = 'excluded_sources';         // 제외할 언론사
+  static const _allowedSourcesKey = 'allowed_sources';             // 허용 언론사 (화이트리스트)
   static const _discoveredCategoriesKey = 'discovered_categories'; // 수집된 카테고리 전체
   static const _excludedCategoriesKey = 'excluded_categories';     // 제외할 카테고리
 
@@ -42,32 +41,18 @@ class StorageService {
     return list.map((e) => NewsItem.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  // ── 언론사 관련 ──────────────────────────────────────
+  // ── 언론사 관련 (화이트리스트) ────────────────────────
 
-  // 수집 중 발견된 언론사 전체 목록 (자동 누적)
-  static Future<Set<String>> loadDiscoveredSources() async {
+  // 허용 언론사 목록 불러오기 (비어있으면 전체 허용)
+  static Future<Set<String>> loadAllowedSources() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_discoveredSourcesKey)?.toSet() ?? {};
+    return prefs.getStringList(_allowedSourcesKey)?.toSet() ?? {};
   }
 
-  // 수집 시 발견된 언론사 추가 (누적)
-  static Future<void> addDiscoveredSources(Iterable<String> sources) async {
+  // 허용 언론사 저장
+  static Future<void> saveAllowedSources(Set<String> sources) async {
     final prefs = await SharedPreferences.getInstance();
-    final discovered = prefs.getStringList(_discoveredSourcesKey)?.toSet() ?? {};
-    discovered.addAll(sources.where((s) => s.isNotEmpty));
-    await prefs.setStringList(_discoveredSourcesKey, discovered.toList());
-  }
-
-  // 제외할 언론사 불러오기
-  static Future<Set<String>> loadExcludedSources() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_excludedSourcesKey)?.toSet() ?? {};
-  }
-
-  // 제외할 언론사 저장
-  static Future<void> saveExcludedSources(Set<String> sources) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_excludedSourcesKey, sources.toList());
+    await prefs.setStringList(_allowedSourcesKey, sources.toList());
   }
 
   // ── 카테고리 관련 ─────────────────────────────────────
@@ -98,11 +83,11 @@ class StorageService {
     await prefs.setStringList(_excludedCategoriesKey, categories.toList());
   }
 
-  // 새 뉴스와 기존 뉴스 병합: 중복 제거 + 30일 이내 + 제외 언론사/카테고리 필터
+  // 새 뉴스와 기존 뉴스 병합: 중복 제거 + 30일 이내 + 언론사 화이트리스트 + 카테고리 블랙리스트
   static List<NewsItem> mergeAndFilter(
     List<NewsItem> fresh,
     List<NewsItem> prev, {
-    Set<String> excludedSources = const {},
+    Set<String> allowedSources = const {},   // 비어있으면 전체 허용
     Set<String> excludedCategories = const {},
   }) {
     final cutoff = DateTime.now().subtract(const Duration(days: 30));
@@ -111,7 +96,7 @@ class StorageService {
         .where((n) {
           if (!seenLinks.add(n.link)) return false;
           if (!n.publishedAt.isAfter(cutoff)) return false;
-          if (excludedSources.contains(n.source)) return false;
+          if (allowedSources.isNotEmpty && !allowedSources.contains(n.source)) return false;
           if (n.category.isNotEmpty && excludedCategories.contains(n.category)) return false;
           return true;
         })

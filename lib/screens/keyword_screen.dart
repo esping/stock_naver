@@ -11,8 +11,7 @@ class KeywordScreen extends StatefulWidget {
 
 class _KeywordScreenState extends State<KeywordScreen> {
   List<Stock> _stocks = [];
-  Set<String> _discoveredSources = {};
-  Set<String> _excludedSources = {};
+  Set<String> _allowedSources = {};
   Set<String> _discoveredCategories = {};
   Set<String> _excludedCategories = {};
 
@@ -24,14 +23,12 @@ class _KeywordScreenState extends State<KeywordScreen> {
 
   Future<void> _load() async {
     final stocks = await StorageService.loadStocks();
-    final discovered = await StorageService.loadDiscoveredSources();
-    final excluded = await StorageService.loadExcludedSources();
+    final allowed = await StorageService.loadAllowedSources();
     final discoveredCat = await StorageService.loadDiscoveredCategories();
     final excludedCat = await StorageService.loadExcludedCategories();
     setState(() {
       _stocks = stocks;
-      _discoveredSources = discovered;
-      _excludedSources = excluded;
+      _allowedSources = allowed;
       _discoveredCategories = discoveredCat;
       _excludedCategories = excludedCat;
     });
@@ -148,17 +145,47 @@ class _KeywordScreenState extends State<KeywordScreen> {
     );
   }
 
-  // ── 언론사 관련 ──────────────────────────────────────
+  // ── 언론사 관련 (화이트리스트) ────────────────────────
 
-  void _toggleExclude(String source) {
-    setState(() {
-      if (_excludedSources.contains(source)) {
-        _excludedSources.remove(source);
-      } else {
-        _excludedSources.add(source);
-      }
-    });
-    StorageService.saveExcludedSources(_excludedSources);
+  void _addSource(String source) {
+    final trimmed = source.trim();
+    if (trimmed.isEmpty || _allowedSources.contains(trimmed)) return;
+    setState(() => _allowedSources.add(trimmed));
+    StorageService.saveAllowedSources(_allowedSources);
+  }
+
+  void _removeSource(String source) {
+    setState(() => _allowedSources.remove(source));
+    StorageService.saveAllowedSources(_allowedSources);
+  }
+
+  void _showAddSourceDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('언론사 추가'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '예: 한국경제, 조선일보'),
+          onSubmitted: (v) {
+            _addSource(v);
+            Navigator.pop(ctx);
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+          TextButton(
+            onPressed: () {
+              _addSource(controller.text);
+              Navigator.pop(ctx);
+            },
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── 카테고리 관련 ─────────────────────────────────────
@@ -182,51 +209,42 @@ class _KeywordScreenState extends State<KeywordScreen> {
       appBar: AppBar(title: const Text('설정')),
       body: ListView(
         children: [
-          // 언론사 관리 섹션
+          // 언론사 관리 섹션 (화이트리스트)
           Card(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: ExpansionTile(
               title: const Text('언론사 관리', style: TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(
-                _discoveredSources.isEmpty
-                    ? '뉴스 수집 후 자동으로 목록이 채워집니다'
-                    : '${_discoveredSources.length}개 발견 · ${_excludedSources.length}개 제외 중',
+                _allowedSources.isEmpty
+                    ? '추가된 언론사 없음 (전체 언론사 표시)'
+                    : '${_allowedSources.length}개 언론사만 표시',
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
               children: [
-                if (_discoveredSources.isEmpty)
+                if (_allowedSources.isEmpty)
                   const Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
                     child: Text(
-                      '새로고침으로 뉴스를 수집하면\n언론사 목록이 자동으로 나타납니다.',
+                      '언론사를 추가하면 해당 언론사 기사만 표시됩니다.\n추가하지 않으면 모든 언론사 기사가 표시됩니다.',
                       style: TextStyle(fontSize: 13, color: Colors.grey),
                       textAlign: TextAlign.center,
                     ),
-                  )
-                else
-                  ...(_discoveredSources.toList()..sort()).map((source) {
-                    final isExcluded = _excludedSources.contains(source);
-                    return ListTile(
+                  ),
+                ...(_allowedSources.toList()..sort()).map((source) => ListTile(
                       dense: true,
-                      leading: Icon(
-                        Icons.newspaper,
-                        size: 18,
-                        color: isExcluded ? Colors.grey : Colors.indigo,
+                      leading: const Icon(Icons.newspaper, size: 18, color: Colors.indigo),
+                      title: Text(source),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close, size: 18, color: Colors.red),
+                        onPressed: () => _removeSource(source),
                       ),
-                      title: Text(
-                        source,
-                        style: TextStyle(
-                          color: isExcluded ? Colors.grey : null,
-                          decoration: isExcluded ? TextDecoration.lineThrough : null,
-                        ),
-                      ),
-                      trailing: Switch(
-                        value: !isExcluded,
-                        activeColor: Colors.indigo,
-                        onChanged: (_) => _toggleExclude(source),
-                      ),
-                    );
-                  }),
+                    )),
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.add, size: 18, color: Colors.indigo),
+                  title: const Text('언론사 추가', style: TextStyle(color: Colors.indigo)),
+                  onTap: _showAddSourceDialog,
+                ),
               ],
             ),
           ),
