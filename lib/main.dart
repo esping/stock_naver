@@ -19,10 +19,10 @@ void callbackDispatcher() {
     final prevNews = await StorageService.loadNews();
     final prevTitles = prevNews.map((n) => n.title).toSet();
 
-    final enabledSections = await StorageService.loadEnabledSections();
-    final freshNews = await RssService.fetchAllNews(stocks, enabledSections: enabledSections);
-
     final allowedSources = await StorageService.loadAllowedSources();
+    final excludedKeywords = await StorageService.loadExcludedKeywords();
+    final freshNews = await RssService.fetchAllNews(stocks, allowedSources: allowedSources, excludedKeywords: excludedKeywords);
+
     final mergedNews = StorageService.mergeAndFilter(
       freshNews, prevNews,
       allowedSources: allowedSources,

@@ -58,10 +58,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final prevNews = await StorageService.loadNews();
     final prevTitles = prevNews.map((n) => n.title).toSet();
 
-    final enabledSections = await StorageService.loadEnabledSections();
-    final freshNews = await RssService.fetchAllNews(stocks, enabledSections: enabledSections);
-
     final allowedSources = await StorageService.loadAllowedSources();
+    final excludedKeywords = await StorageService.loadExcludedKeywords();
+    final freshNews = await RssService.fetchAllNews(stocks, allowedSources: allowedSources, excludedKeywords: excludedKeywords);
+
     final mergedNews = StorageService.mergeAndFilter(
       freshNews, prevNews,
       allowedSources: allowedSources,
@@ -147,14 +147,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: ListView.separated(
                 controller: scrollController,
                 itemCount: articles.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (_, i) {
                   final item = articles[i];
                   return ListTile(
                     title: Text(item.title,
                         style: const TextStyle(fontSize: 14)),
                     subtitle: Text(
-                      '${item.section.isNotEmpty ? '[${item.section}]  ' : ''}${item.source}  ·  ${_formatTime(item.publishedAt)}',
+                      '${item.source}  ·  ${_formatTime(item.publishedAt)}',
                       style: const TextStyle(
                           fontSize: 12, color: Colors.grey),
                     ),

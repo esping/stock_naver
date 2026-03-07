@@ -4,12 +4,12 @@ import '../models/stock.dart';
 import '../models/news_item.dart';
 
 class StorageService {
-  static const _stocksKey = 'stocks';
-  static const _newsKey = 'news';
-  static const _allowedSourcesKey = 'allowed_sources';   // 허용 언론사 (화이트리스트)
-  static const _enabledSectionsKey = 'enabled_sections'; // 수집할 섹션
+  static const _stocksKey = 'stocks_list';
+  static const _newsKey = 'saved_news';
+  static const _allowedSourcesKey = 'allowed_sources'; // 허용된 언론사 목록
+  static const _excludedKeywordsKey = 'excluded_keywords'; // 제외 키워드 목록
 
-  // 종목 목록 불러오기
+  // ── 종목 관련 ──────────────────────────────────────불러오기
   static Future<List<Stock>> loadStocks() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_stocksKey);
@@ -40,37 +40,31 @@ class StorageService {
     return list.map((e) => NewsItem.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  // ── 언론사 관련 (화이트리스트) ────────────────────────
+  // ── 언론사/제외키워드 관리 ──────────────────────────
 
-  // 허용 언론사 목록 불러오기 (비어있으면 전체 허용)
   static Future<Set<String>> loadAllowedSources() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_allowedSourcesKey)?.toSet() ?? {};
+    final saved = prefs.getStringList(_allowedSourcesKey);
+    return saved?.toSet() ?? {};
   }
 
-  // 허용 언론사 저장
   static Future<void> saveAllowedSources(Set<String> sources) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_allowedSourcesKey, sources.toList());
   }
 
-  // ── 섹션 관련 ─────────────────────────────────────────
-
-  // 수집할 섹션 목록 (기본: BUSINESS, TECHNOLOGY)
-  static Future<Set<String>> loadEnabledSections() async {
+  static Future<Set<String>> loadExcludedKeywords() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList(_enabledSectionsKey);
-    if (saved == null) return {'BUSINESS', 'TECHNOLOGY'};
-    return saved.toSet();
+    final saved = prefs.getStringList(_excludedKeywordsKey);
+    return saved?.toSet() ?? {};
   }
 
-  // 수집할 섹션 저장
-  static Future<void> saveEnabledSections(Set<String> sections) async {
+  static Future<void> saveExcludedKeywords(Set<String> keywords) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_enabledSectionsKey, sections.toList());
+    await prefs.setStringList(_excludedKeywordsKey, keywords.toList());
   }
 
-  // 새 뉴스와 기존 뉴스 병합: 중복 제거 + 30일 이내 + 언론사 화이트리스트
+  // ── 뉴스 데이터 (로컬 캐싱) ──────────────────────────병합: 중복 제거 + 30일 이내 + 언론사 화이트리스트
   static List<NewsItem> mergeAndFilter(
     List<NewsItem> fresh,
     List<NewsItem> prev, {

@@ -3,47 +3,42 @@ import 'package:xml/xml.dart';
 import '../models/news_item.dart';
 import '../models/stock.dart';
 
-// 제공 섹션 목록 (key → 한국어 표시명)
-const Map<String, String> kGoogleNewsSections = {
-  'BUSINESS': '비즈니스',
-  'TECHNOLOGY': 'IT·과학',
-  'NATION': '국내',
-  'WORLD': '세계',
-  'ENTERTAINMENT': '연예',
-  'SPORTS': '스포츠',
-  'SCIENCE': '과학',
-  'HEALTH': '건강',
-};
-
 class RssService {
   static Future<List<NewsItem>> fetchAllNews(
     List<Stock> stocks, {
-    Set<String> enabledSections = const {},
+    Set<String> allowedSources = const {},
+    Set<String> excludedKeywords = const {},
   }) async {
-    if (stocks.isEmpty || enabledSections.isEmpty) return [];
+    if (stocks.isEmpty) return [];
 
     final allItems = <NewsItem>[];
     final seenLinks = <String>{};
 
-    for (final sectionKey in enabledSections) {
-      final sectionName = kGoogleNewsSections[sectionKey] ?? sectionKey;
-      final items = await _fetchBySection(sectionKey, sectionName, stocks);
-      for (final item in items) {
-        if (seenLinks.add(item.link)) {
-          allItems.add(item);
-        }
-      }
-    }
+    // 제외 키워드 조립 (예: "-주가 -하락")
+    final exclusionStr = excludedKeywords.isEmpty
+        ? ''
+        : ' ' + excludedKeywords.map((k) => '-\$k').join(' ');
 
-    // 섹션에서 기사가 없는 종목은 키워드 검색(7일치)으로 폴백
-    final stocksWithArticles = allItems.map((n) => n.stockName).toSet();
     for (final stock in stocks) {
-      if (stocksWithArticles.contains(stock.name)) continue;
       for (final keyword in stock.keywords) {
-        final items = await _fetchByKeyword(keyword, stock.name);
-        for (final item in items) {
-          if (seenLinks.add(item.link)) {
-            allItems.add(item);
+        if (allowedSources.isEmpty) {
+          // 언론사 지정이 없으면 (키워드 -제외단어) 검색
+          final searchQuery = '$keyword$exclusionStr';
+          final items = await _fetchByKeyword(searchQuery, stock.name);
+          for (final item in items) {
+            if (seenLinks.add(item.link)) {
+              allItems.add(item);
+            }
+          }
+        } else {
+          // 등록된 언론사가 있으면 (언론사A OR 언론사B) 키워드 -제외단어 형태로 한 번에 검색
+          final sourcesQuery = allowedSources.join(' OR ');
+          final searchQuery = '$keyword$exclusionStr ($sourcesQuery)';
+          final items = await _fetchByKeyword(searchQuery, stock.name);
+          for (final item in items) {
+            if (seenLinks.add(item.link)) {
+              allItems.add(item);
+            }
           }
         }
       }
@@ -59,40 +54,19 @@ class RssService {
   ) async {
     final encodedKeyword = Uri.encodeComponent(keyword);
     final url =
-        'https://news.google.com/rss/search?q=$encodedKeyword+when:7d&hl=ko&gl=KR&ceid=KR:ko';
+        'https://news.google.com/rss/search?q=$encodedKeyword+when:1d&hl=ko&gl=KR&ceid=KR:ko';
     try {
-      final response =
-          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode != 200) return [];
-      return _parseRss(response.body, '', [Stock(name: stockName, keywords: [keyword])]);
+      return _parseRss(response.body, stockName);
     } catch (_) {
       return [];
     }
   }
 
-  static Future<List<NewsItem>> _fetchBySection(
-    String sectionKey,
-    String sectionName,
-    List<Stock> stocks,
-  ) async {
-    final url =
-        'https://news.google.com/rss/headlines/section/topic/$sectionKey?hl=ko&gl=KR&ceid=KR:ko';
-
-    try {
-      final response =
-          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
-      if (response.statusCode != 200) return [];
-      return _parseRss(response.body, sectionName, stocks);
-    } catch (_) {
-      return [];
-    }
-  }
-
-  static List<NewsItem> _parseRss(
-    String xmlBody,
-    String sectionName,
-    List<Stock> stocks,
-  ) {
+  static List<NewsItem> _parseRss(String xmlBody, String stockName) {
     final items = <NewsItem>[];
     try {
       final document = XmlDocument.parse(xmlBody);
@@ -108,22 +82,15 @@ class RssService {
 
         if (title.isEmpty || link.isEmpty) continue;
 
-        final publishedAt = _parseDate(pubDate);
-
-        // 어떤 종목 키워드가 제목에 포함되는지 확인
-        for (final stock in stocks) {
-          final matched = stock.keywords.any((kw) => title.contains(kw));
-          if (matched) {
-            items.add(NewsItem(
-              title: title,
-              link: link,
-              source: source,
-              section: sectionName,
-              publishedAt: publishedAt,
-              stockName: stock.name,
-            ));
-          }
-        }
+        items.add(
+          NewsItem(
+            title: title,
+            link: link,
+            source: source,
+            publishedAt: _parseDate(pubDate),
+            stockName: stockName,
+          ),
+        );
       }
     } catch (_) {}
     return items;
@@ -146,15 +113,31 @@ class RssService {
 class HttpDate {
   static DateTime parse(String date) {
     final months = {
-      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-      'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+      'Jan': 1,
+      'Feb': 2,
+      'Mar': 3,
+      'Apr': 4,
+      'May': 5,
+      'Jun': 6,
+      'Jul': 7,
+      'Aug': 8,
+      'Sep': 9,
+      'Oct': 10,
+      'Nov': 11,
+      'Dec': 12,
     };
     final parts = date.split(' ');
     final day = int.parse(parts[1]);
     final month = months[parts[2]] ?? 1;
     final year = int.parse(parts[3]);
     final timeParts = parts[4].split(':');
-    return DateTime.utc(year, month, day,
-        int.parse(timeParts[0]), int.parse(timeParts[1]), int.parse(timeParts[2]));
+    return DateTime.utc(
+      year,
+      month,
+      day,
+      int.parse(timeParts[0]),
+      int.parse(timeParts[1]),
+      int.parse(timeParts[2]),
+    );
   }
 }

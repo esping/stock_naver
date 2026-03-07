@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/stock.dart';
 import '../services/storage_service.dart';
-import '../services/rss_service.dart';
 
 class KeywordScreen extends StatefulWidget {
   const KeywordScreen({super.key});
@@ -13,7 +12,7 @@ class KeywordScreen extends StatefulWidget {
 class _KeywordScreenState extends State<KeywordScreen> {
   List<Stock> _stocks = [];
   Set<String> _allowedSources = {};
-  Set<String> _enabledSections = {};
+  Set<String> _excludedKeywords = {};
   bool _newStockAdded = false;
 
   @override
@@ -25,11 +24,11 @@ class _KeywordScreenState extends State<KeywordScreen> {
   Future<void> _load() async {
     final stocks = await StorageService.loadStocks();
     final allowed = await StorageService.loadAllowedSources();
-    final sections = await StorageService.loadEnabledSections();
+    final excluded = await StorageService.loadExcludedKeywords();
     setState(() {
       _stocks = stocks;
       _allowedSources = allowed;
-      _enabledSections = sections;
+      _excludedKeywords = excluded;
     });
   }
 
@@ -193,17 +192,47 @@ class _KeywordScreenState extends State<KeywordScreen> {
     );
   }
 
-  // ── 섹션 관련 ─────────────────────────────────────────
+  // ── 제외 키워드 관리 ──────────────────────────
 
-  void _toggleSection(String sectionKey) {
-    setState(() {
-      if (_enabledSections.contains(sectionKey)) {
-        _enabledSections.remove(sectionKey);
-      } else {
-        _enabledSections.add(sectionKey);
-      }
-    });
-    StorageService.saveEnabledSections(_enabledSections);
+  void _addExcludedKeyword(String keyword) {
+    final trimmed = keyword.trim();
+    if (trimmed.isEmpty || _excludedKeywords.contains(trimmed)) return;
+    setState(() => _excludedKeywords.add(trimmed));
+    StorageService.saveExcludedKeywords(_excludedKeywords);
+  }
+
+  void _removeExcludedKeyword(String keyword) {
+    setState(() => _excludedKeywords.remove(keyword));
+    StorageService.saveExcludedKeywords(_excludedKeywords);
+  }
+
+  void _showAddExcludedKeywordDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('제외 키워드 추가'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '예: 주가, 하락, 루머'),
+          onSubmitted: (v) {
+            _addExcludedKeyword(v);
+            Navigator.pop(ctx);
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+          TextButton(
+            onPressed: () {
+              _addExcludedKeyword(controller.text);
+              Navigator.pop(ctx);
+            },
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── UI ───────────────────────────────────────────────
@@ -225,40 +254,6 @@ class _KeywordScreenState extends State<KeywordScreen> {
       ),
       body: ListView(
         children: [
-          // 섹션 선택 섹션
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: ExpansionTile(
-              initiallyExpanded: true,
-              title: const Text('뉴스 섹션', style: TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(
-                _enabledSections.isEmpty
-                    ? '섹션을 선택하면 해당 섹션 기사를 수집합니다'
-                    : '${_enabledSections.length}개 섹션 수집 중',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  child: Text(
-                    '선택한 섹션에서 종목 키워드가 포함된 기사를 수집합니다.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ),
-                ...kGoogleNewsSections.entries.map((entry) {
-                  final isEnabled = _enabledSections.contains(entry.key);
-                  return CheckboxListTile(
-                    dense: true,
-                    value: isEnabled,
-                    activeColor: Colors.indigo,
-                    title: Text(entry.value),
-                    onChanged: (_) => _toggleSection(entry.key),
-                  );
-                }),
-              ],
-            ),
-          ),
-
           // 언론사 관리 섹션 (화이트리스트)
           Card(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -294,6 +289,46 @@ class _KeywordScreenState extends State<KeywordScreen> {
                   leading: const Icon(Icons.add, size: 18, color: Colors.indigo),
                   title: const Text('언론사 추가', style: TextStyle(color: Colors.indigo)),
                   onTap: _showAddSourceDialog,
+                ),
+              ],
+            ),
+          ),
+
+          // 제외 키워드 관리 섹션
+          Card(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: ExpansionTile(
+              title: const Text('제외 키워드 관리', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                _excludedKeywords.isEmpty
+                    ? '제외할 키워드 없음'
+                    : '${_excludedKeywords.length}개 키워드 제외 중',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              children: [
+                if (_excludedKeywords.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Text(
+                      '기사에서 제외하고 싶은 단어(예: 주가, 찌라시)를 추가하세요.\n해당 단어가 포함된 뉴스는 수집되지 않습니다.',
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ...(_excludedKeywords.toList()..sort()).map((keyword) => ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.block, size: 18, color: Colors.deepOrange),
+                      title: Text(keyword),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close, size: 18, color: Colors.red),
+                        onPressed: () => _removeExcludedKeyword(keyword),
+                      ),
+                    )),
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.add, size: 18, color: Colors.deepOrange),
+                  title: const Text('제외 키워드 추가', style: TextStyle(color: Colors.deepOrange)),
+                  onTap: _showAddExcludedKeywordDialog,
                 ),
               ],
             ),
