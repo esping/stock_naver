@@ -17,7 +17,7 @@ class RssService {
     // 제외 키워드 조립 (예: "-주가 -하락")
     final exclusionStr = excludedKeywords.isEmpty
         ? ''
-        : ' ' + excludedKeywords.map((k) => '-\$k').join(' ');
+        : ' ${excludedKeywords.map((k) => '-$k').join(' ')}';
 
     for (final stock in stocks) {
       for (final keyword in stock.keywords) {
