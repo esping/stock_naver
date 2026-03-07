@@ -24,10 +24,12 @@ class StorageService {
     await prefs.setString(_stocksKey, jsonEncode(stocks.map((s) => s.toJson()).toList()));
   }
 
-  // 뉴스 저장 (최대 2000개)
+  // 뉴스 저장 (최대 5000개: 개수 초과 시 가장 오래된 데이터부터 삭제)
   static Future<void> saveNews(List<NewsItem> items) async {
     final prefs = await SharedPreferences.getInstance();
-    final limited = items.take(2000).toList();
+    // items는 이미 최신순(내림차순)으로 정렬되어 있으므로, 
+    // take(5000)을 하면 최신 5000개만 유지되고 가장 오래된 데이터가 자연스럽게 삭제됩니다.
+    final limited = items.take(5000).toList();
     await prefs.setString(_newsKey, jsonEncode(limited.map((n) => n.toJson()).toList()));
   }
 
