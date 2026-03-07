@@ -31,13 +31,14 @@ class RssService {
             }
           }
         } else {
-          // 등록된 언론사가 있으면 (언론사A OR 언론사B) 키워드 -제외단어 형태로 한 번에 검색
-          final sourcesQuery = allowedSources.join(' OR ');
-          final searchQuery = '$keyword$exclusionStr ($sourcesQuery)';
-          final items = await _fetchByKeyword(searchQuery, stock.name);
-          for (final item in items) {
-            if (seenLinks.add(item.link)) {
-              allItems.add(item);
+          // 등록된 언론사가 있으면 언론사별로 "언론사명 키워드 -제외단어" 형태로 각각 검색 (Google RSS 버그 회피)
+          for (final source in allowedSources) {
+            final searchQuery = '$source $keyword$exclusionStr';
+            final items = await _fetchByKeyword(searchQuery, stock.name);
+            for (final item in items) {
+              if (seenLinks.add(item.link)) {
+                allItems.add(item);
+              }
             }
           }
         }

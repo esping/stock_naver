@@ -45,7 +45,7 @@ class StorageService {
   static Future<Set<String>> loadAllowedSources() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList(_allowedSourcesKey);
-    return saved?.toSet() ?? {};
+    return saved?.toSet() ?? {'한국경제', '매일경제'};
   }
 
   static Future<void> saveAllowedSources(Set<String> sources) async {

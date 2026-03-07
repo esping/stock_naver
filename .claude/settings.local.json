@@ -4,7 +4,21 @@
       "Bash(dart fix --dry-run)",
       "Bash(/c/develop/flutter/bin/flutter build apk --debug)",
       "Bash(/c/develop/flutter/bin/flutter devices)",
-      "Bash(/c/develop/flutter/bin/flutter run -d emulator-5554)"
+      "Bash(/c/develop/flutter/bin/flutter run -d emulator-5554)",
+      "Bash(flutter build apk --release)",
+      "Bash(cmd /c \"flutter build apk --release\")",
+      "Bash(cmd /c \"flutter build apk --release && echo BUILD_DONE\")",
+      "Bash(where flutter.bat)",
+      "Bash(where flutter)",
+      "Bash(/c/develop/flutter/bin/flutter build apk --release)",
+      "Bash(gh release create v1.0.0 \"build/app/outputs/flutter-apk/app-release.apk#my-stock-v1.0.0.apk\" --title \"v1.0.0 내 주식 뉴스\" --notes \"## 내 주식 뉴스 v1.0.0:*)",
+      "Bash(cmd /c \"gh --version\")",
+      "Bash(\"/c/develop/GitHub CLI/gh.exe\" --version)",
+      "Bash(\"/c/develop/GitHub CLI/gh.exe\" auth status)",
+      "Bash(\"/c/develop/GitHub CLI/gh.exe\" release create v1.0.1 \"build/app/outputs/flutter-apk/app-release.apk#my-stock-v1.0.1.apk\" --title \"v1.0.1 버그수정\" --notes \"## 버그 수정:*)",
+      "Bash(\"/c/develop/GitHub CLI/gh.exe\" release create v1.0.2 \"build/app/outputs/flutter-apk/app-release.apk#my-stock-v1.0.2.apk\" --title \"v1.0.2 카테고리 필터 추가\" --notes \"## 새 기능:*)",
+      "Bash(\"/c/develop/GitHub CLI/gh.exe\" release create v1.0.3 \"build/app/outputs/flutter-apk/app-release.apk#my-stock-v1.0.3.apk\" --title \"v1.0.3 언론사 필터 개선\" --notes \"## 변경사항:*)",
+      "Bash(/c/develop/flutter/bin/flutter analyze --no-fatal-infos)"
     ]
   }
 }
