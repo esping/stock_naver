@@ -68,8 +68,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
     await StorageService.saveNews(mergedNews);
 
-    // 새 기사 집계 후 통합 알림 1건
-    final newArticles = freshNews.where((n) => !prevTitles.contains(n.title)).toList();
+    // 새 기사 집계 후 통합 알림 1건 (실제 저장된 기사 기준)
+    final newArticles = mergedNews.where((n) => !prevTitles.contains(n.title)).toList();
     final newKeywordCount = stocks
         .where((s) => newArticles.any((n) => n.stockName == s.name))
         .length;
