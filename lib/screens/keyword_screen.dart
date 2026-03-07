@@ -13,6 +13,8 @@ class _KeywordScreenState extends State<KeywordScreen> {
   List<Stock> _stocks = [];
   Set<String> _discoveredSources = {};
   Set<String> _excludedSources = {};
+  Set<String> _discoveredCategories = {};
+  Set<String> _excludedCategories = {};
 
   @override
   void initState() {
@@ -24,10 +26,14 @@ class _KeywordScreenState extends State<KeywordScreen> {
     final stocks = await StorageService.loadStocks();
     final discovered = await StorageService.loadDiscoveredSources();
     final excluded = await StorageService.loadExcludedSources();
+    final discoveredCat = await StorageService.loadDiscoveredCategories();
+    final excludedCat = await StorageService.loadExcludedCategories();
     setState(() {
       _stocks = stocks;
       _discoveredSources = discovered;
       _excludedSources = excluded;
+      _discoveredCategories = discoveredCat;
+      _excludedCategories = excludedCat;
     });
   }
 
@@ -155,6 +161,19 @@ class _KeywordScreenState extends State<KeywordScreen> {
     StorageService.saveExcludedSources(_excludedSources);
   }
 
+  // ── 카테고리 관련 ─────────────────────────────────────
+
+  void _toggleExcludeCategory(String category) {
+    setState(() {
+      if (_excludedCategories.contains(category)) {
+        _excludedCategories.remove(category);
+      } else {
+        _excludedCategories.add(category);
+      }
+    });
+    StorageService.saveExcludedCategories(_excludedCategories);
+  }
+
   // ── UI ───────────────────────────────────────────────
 
   @override
@@ -205,6 +224,55 @@ class _KeywordScreenState extends State<KeywordScreen> {
                         value: !isExcluded,
                         activeColor: Colors.indigo,
                         onChanged: (_) => _toggleExclude(source),
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          ),
+
+          // 카테고리 관리 섹션
+          Card(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: ExpansionTile(
+              title: const Text('카테고리 관리', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                _discoveredCategories.isEmpty
+                    ? '뉴스 수집 후 자동으로 목록이 채워집니다'
+                    : '${_discoveredCategories.length}개 발견 · ${_excludedCategories.length}개 제외 중',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              children: [
+                if (_discoveredCategories.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      '새로고침으로 뉴스를 수집하면\n카테고리 목록이 자동으로 나타납니다.',
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                else
+                  ...(_discoveredCategories.toList()..sort()).map((category) {
+                    final isExcluded = _excludedCategories.contains(category);
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(
+                        Icons.label_outline,
+                        size: 18,
+                        color: isExcluded ? Colors.grey : Colors.indigo,
+                      ),
+                      title: Text(
+                        category,
+                        style: TextStyle(
+                          color: isExcluded ? Colors.grey : null,
+                          decoration: isExcluded ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      trailing: Switch(
+                        value: !isExcluded,
+                        activeColor: Colors.indigo,
+                        onChanged: (_) => _toggleExcludeCategory(category),
                       ),
                     );
                   }),

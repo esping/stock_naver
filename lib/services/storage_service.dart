@@ -6,9 +6,10 @@ import '../models/news_item.dart';
 class StorageService {
   static const _stocksKey = 'stocks';
   static const _newsKey = 'news';
-  static const _knownKeywordsKey = 'known_keywords';
-  static const _discoveredSourcesKey = 'discovered_sources'; // 수집된 언론사 전체
-  static const _excludedSourcesKey = 'excluded_sources';     // 제외할 언론사
+  static const _discoveredSourcesKey = 'discovered_sources';     // 수집된 언론사 전체
+  static const _excludedSourcesKey = 'excluded_sources';         // 제외할 언론사
+  static const _discoveredCategoriesKey = 'discovered_categories'; // 수집된 카테고리 전체
+  static const _excludedCategoriesKey = 'excluded_categories';     // 제외할 카테고리
 
   // 종목 목록 불러오기
   static Future<List<Stock>> loadStocks() async {
@@ -19,36 +20,16 @@ class StorageService {
     return list.map((e) => Stock.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  // 종목 목록 저장 (삭제된 키워드는 knownKeywords에서도 제거)
+  // 종목 목록 저장
   static Future<void> saveStocks(List<Stock> stocks) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_stocksKey, jsonEncode(stocks.map((s) => s.toJson()).toList()));
-
-    // 현재 종목에 없는 키워드는 known에서 제거 (재추가 시 신규로 처리)
-    final currentKeywords = stocks.expand((s) => s.keywords).toSet();
-    final known = prefs.getStringList(_knownKeywordsKey)?.toSet() ?? {};
-    final filtered = known.intersection(currentKeywords);
-    await prefs.setStringList(_knownKeywordsKey, filtered.toList());
   }
 
-  // 이미 수집한 적 있는 키워드 목록 불러오기
-  static Future<Set<String>> loadKnownKeywords() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_knownKeywordsKey)?.toSet() ?? {};
-  }
-
-  // 수집 완료된 키워드 등록
-  static Future<void> addKnownKeywords(Iterable<String> keywords) async {
-    final prefs = await SharedPreferences.getInstance();
-    final known = prefs.getStringList(_knownKeywordsKey)?.toSet() ?? {};
-    known.addAll(keywords);
-    await prefs.setStringList(_knownKeywordsKey, known.toList());
-  }
-
-  // 뉴스 저장 (최대 200개)
+  // 뉴스 저장 (최대 2000개)
   static Future<void> saveNews(List<NewsItem> items) async {
     final prefs = await SharedPreferences.getInstance();
-    final limited = items.take(200).toList();
+    final limited = items.take(2000).toList();
     await prefs.setString(_newsKey, jsonEncode(limited.map((n) => n.toJson()).toList()));
   }
 
@@ -89,11 +70,40 @@ class StorageService {
     await prefs.setStringList(_excludedSourcesKey, sources.toList());
   }
 
-  // 새 뉴스와 기존 뉴스 병합: 중복 제거 + 30일 이내 + 제외 언론사 필터
+  // ── 카테고리 관련 ─────────────────────────────────────
+
+  // 수집 중 발견된 카테고리 전체 목록 (자동 누적)
+  static Future<Set<String>> loadDiscoveredCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_discoveredCategoriesKey)?.toSet() ?? {};
+  }
+
+  // 수집 시 발견된 카테고리 추가 (누적)
+  static Future<void> addDiscoveredCategories(Iterable<String> categories) async {
+    final prefs = await SharedPreferences.getInstance();
+    final discovered = prefs.getStringList(_discoveredCategoriesKey)?.toSet() ?? {};
+    discovered.addAll(categories.where((c) => c.isNotEmpty));
+    await prefs.setStringList(_discoveredCategoriesKey, discovered.toList());
+  }
+
+  // 제외할 카테고리 불러오기
+  static Future<Set<String>> loadExcludedCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_excludedCategoriesKey)?.toSet() ?? {};
+  }
+
+  // 제외할 카테고리 저장
+  static Future<void> saveExcludedCategories(Set<String> categories) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_excludedCategoriesKey, categories.toList());
+  }
+
+  // 새 뉴스와 기존 뉴스 병합: 중복 제거 + 30일 이내 + 제외 언론사/카테고리 필터
   static List<NewsItem> mergeAndFilter(
     List<NewsItem> fresh,
     List<NewsItem> prev, {
     Set<String> excludedSources = const {},
+    Set<String> excludedCategories = const {},
   }) {
     final cutoff = DateTime.now().subtract(const Duration(days: 30));
     final seenLinks = <String>{};
@@ -102,6 +112,7 @@ class StorageService {
           if (!seenLinks.add(n.link)) return false;
           if (!n.publishedAt.isAfter(cutoff)) return false;
           if (excludedSources.contains(n.source)) return false;
+          if (n.category.isNotEmpty && excludedCategories.contains(n.category)) return false;
           return true;
         })
         .toList()

@@ -18,19 +18,23 @@ void callbackDispatcher() {
     final stocks = await StorageService.loadStocks();
     final prevNews = await StorageService.loadNews();
     final prevLinks = prevNews.map((n) => n.link).toSet();
-    final knownKeywords = await StorageService.loadKnownKeywords();
-    final allKeywords = stocks.expand((s) => s.keywords).toSet();
 
-    final freshNews = await RssService.fetchAllNews(stocks, knownKeywords: knownKeywords);
+    final freshNews = await RssService.fetchAllNews(stocks);
 
-    // 발견된 언론사 누적 저장
+    // 발견된 언론사·카테고리 누적 저장
     final sourcesInFresh = freshNews.map((n) => n.source).toSet();
     await StorageService.addDiscoveredSources(sourcesInFresh);
+    final categoriesInFresh = freshNews.map((n) => n.category).where((c) => c.isNotEmpty).toSet();
+    await StorageService.addDiscoveredCategories(categoriesInFresh);
 
     final excludedSources = await StorageService.loadExcludedSources();
-    final mergedNews = StorageService.mergeAndFilter(freshNews, prevNews, excludedSources: excludedSources);
+    final excludedCategories = await StorageService.loadExcludedCategories();
+    final mergedNews = StorageService.mergeAndFilter(
+      freshNews, prevNews,
+      excludedSources: excludedSources,
+      excludedCategories: excludedCategories,
+    );
     await StorageService.saveNews(mergedNews);
-    await StorageService.addKnownKeywords(allKeywords);
 
     // 새 기사 집계 후 통합 알림 1건
     final newArticles = freshNews.where((n) => !prevLinks.contains(n.link)).toList();

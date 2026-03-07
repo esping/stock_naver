@@ -4,20 +4,14 @@ import '../models/news_item.dart';
 import '../models/stock.dart';
 
 class RssService {
-  // knownKeywords: 이미 수집한 적 있는 키워드 → 1일치만 가져옴
-  // 새 키워드는 30일치 가져옴
-  static Future<List<NewsItem>> fetchAllNews(
-    List<Stock> stocks, {
-    Set<String> knownKeywords = const {},
-  }) async {
+  // 항상 1일치 수집
+  static Future<List<NewsItem>> fetchAllNews(List<Stock> stocks) async {
     final allItems = <NewsItem>[];
     final seenLinks = <String>{};
 
     for (final stock in stocks) {
       for (final keyword in stock.keywords) {
-        final isNew = !knownKeywords.contains(keyword);
-        final daysBack = isNew ? 30 : 1;
-        final items = await _fetchByKeyword(keyword, stock.name, daysBack: daysBack);
+        final items = await _fetchByKeyword(keyword, stock.name);
         for (final item in items) {
           if (seenLinks.add(item.link)) {
             allItems.add(item);
@@ -32,11 +26,10 @@ class RssService {
 
   static Future<List<NewsItem>> _fetchByKeyword(
     String keyword,
-    String stockName, {
-    int daysBack = 1,
-  }) async {
-    final encoded = Uri.encodeComponent('$keyword when:${daysBack}d');
-    final url = 'https://news.google.com/rss/search?q=$encoded&hl=ko&gl=KR&ceid=KR:ko';
+    String stockName,
+  ) async {
+    final encodedKeyword = Uri.encodeComponent(keyword);
+    final url = 'https://news.google.com/rss/search?q=$encodedKeyword+when:1d&hl=ko&gl=KR&ceid=KR:ko';
 
     try {
       final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
@@ -58,6 +51,7 @@ class RssService {
         final link = entry.findElements('link').firstOrNull?.innerText ?? '';
         final pubDate = entry.findElements('pubDate').firstOrNull?.innerText ?? '';
         final source = entry.findElements('source').firstOrNull?.innerText ?? '';
+        final category = entry.findElements('category').firstOrNull?.innerText ?? '';
 
         if (title.isEmpty || link.isEmpty) continue;
 
@@ -65,6 +59,7 @@ class RssService {
           title: title,
           link: link,
           source: source,
+          category: category,
           publishedAt: _parseDate(pubDate),
           stockName: stockName,
         ));
