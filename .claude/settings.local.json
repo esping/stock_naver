@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dart fix --dry-run)",
+      "Bash(/c/develop/flutter/bin/flutter build apk --debug)",
+      "Bash(/c/develop/flutter/bin/flutter devices)",
+      "Bash(/c/develop/flutter/bin/flutter run -d emulator-5554)"
+    ]
+  }
+}
