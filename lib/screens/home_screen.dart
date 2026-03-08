@@ -14,11 +14,11 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> {
   List<Stock> _stocks = [];
   Map<String, List<NewsItem>> _newsByStock = {};
   bool _loading = false;
-  TabController? _tabController;
+  String? _selectedStock;
 
   @override
   void initState() {
@@ -28,7 +28,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _tabController?.dispose();
     super.dispose();
   }
 
@@ -38,15 +37,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final byStock = <String, List<NewsItem>>{};
     for (final stock in stocks) {
-      byStock[stock.name] =
-          savedNews.where((n) => n.stockName == stock.name).toList();
+      byStock[stock.name] = savedNews
+          .where((n) => n.stockName == stock.name)
+          .toList();
     }
 
     setState(() {
       _stocks = stocks;
       _newsByStock = byStock;
-      _tabController?.dispose();
-      _tabController = TabController(length: stocks.length, vsync: this);
+      if (_stocks.isNotEmpty && _selectedStock == null) {
+        _selectedStock = _stocks.first.name;
+      } else if (_stocks.isNotEmpty &&
+          !_stocks.any((s) => s.name == _selectedStock)) {
+        _selectedStock = _stocks.first.name;
+      } else if (_stocks.isEmpty) {
+        _selectedStock = null;
+      }
     });
   }
 
@@ -60,16 +66,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final allowedSources = await StorageService.loadAllowedSources();
     final excludedKeywords = await StorageService.loadExcludedKeywords();
-    final freshNews = await RssService.fetchAllNews(stocks, allowedSources: allowedSources, excludedKeywords: excludedKeywords);
+    final freshNews = await RssService.fetchAllNews(
+      stocks,
+      allowedSources: allowedSources,
+      excludedKeywords: excludedKeywords,
+    );
 
     final mergedNews = StorageService.mergeAndFilter(
-      freshNews, prevNews,
+      freshNews,
+      prevNews,
       allowedSources: allowedSources,
     );
     await StorageService.saveNews(mergedNews);
 
     // 새 기사 집계 후 통합 알림 1건 (실제 저장된 기사 기준)
-    final newArticles = mergedNews.where((n) => !prevTitles.contains(n.title)).toList();
+    final newArticles = mergedNews
+        .where((n) => !prevTitles.contains(n.title))
+        .toList();
     final newKeywordCount = stocks
         .where((s) => newArticles.any((n) => n.stockName == s.name))
         .length;
@@ -77,8 +90,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final byStock = <String, List<NewsItem>>{};
     for (final stock in stocks) {
-      byStock[stock.name] =
-          mergedNews.where((n) => n.stockName == stock.name).toList();
+      byStock[stock.name] = mergedNews
+          .where((n) => n.stockName == stock.name)
+          .toList();
     }
 
     setState(() {
@@ -111,7 +125,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _showArticlesByDate(
-      String stockName, String dateKey, List<NewsItem> articles) {
+    String stockName,
+    String dateKey,
+    List<NewsItem> articles,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -139,7 +156,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Text(
                 '$stockName · ${_formatDateLabel(dateKey)}',
                 style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const Divider(height: 1),
@@ -151,12 +170,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 itemBuilder: (_, i) {
                   final item = articles[i];
                   return ListTile(
-                    title: Text(item.title,
-                        style: const TextStyle(fontSize: 14)),
+                    title: Text(
+                      item.title,
+                      style: const TextStyle(fontSize: 14),
+                    ),
                     subtitle: Text(
                       '${item.source}  ·  ${_formatTime(item.publishedAt)}',
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                     onTap: () => _openUrl(item.link),
                   );
@@ -169,7 +189,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildStockTab(Stock stock) {
+  Widget _buildSelectedStockNews() {
+    if (_selectedStock == null || _stocks.isEmpty) {
+      return const Center(child: Text('키워드를 추가해주세요'));
+    }
+
+    final stock = _stocks.firstWhere(
+      (s) => s.name == _selectedStock,
+      orElse: () => _stocks.first,
+    );
     final news = _newsByStock[stock.name] ?? [];
 
     // 날짜별 그룹화
@@ -186,42 +214,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          // 키워드 섹션
-          const Text('키워드',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: stock.keywords
-                .map((kw) => Chip(
-                      label: Text(kw,
-                          style: const TextStyle(fontSize: 12)),
-                      backgroundColor: Colors.indigo.shade50,
-                      side: BorderSide(color: Colors.indigo.shade200),
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 4),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 20),
-
           // 날짜별 기사 섹션
-          const Text('날짜별 기사',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey)),
+          const Text(
+            '날짜별 기사',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
           const SizedBox(height: 8),
 
           if (news.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 24),
-              child: Center(
-                  child: Text('뉴스를 수집하려면 새로고침을 눌러주세요')),
+              child: Center(child: Text('뉴스를 수집하려면 새로고침을 눌러주세요')),
             )
           else
             ...sortedDates.map((dateKey) {
@@ -229,11 +236,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               return Card(
                 margin: const EdgeInsets.only(bottom: 6),
                 child: ListTile(
-                  leading: const Icon(Icons.calendar_today,
-                      size: 20, color: Colors.indigo),
+                  leading: const Icon(
+                    Icons.calendar_today,
+                    size: 20,
+                    color: Colors.indigo,
+                  ),
                   title: Text(_formatDateLabel(dateKey)),
-                  trailing: Text('${articles.length}건',
-                      style: const TextStyle(color: Colors.grey)),
+                  trailing: Text(
+                    '${articles.length}건',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
                   onTap: () =>
                       _showArticlesByDate(stock.name, dateKey, articles),
                 ),
@@ -253,8 +265,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () async {
-              final newStockAdded = await Navigator.push<bool>(context,
-                  MaterialPageRoute(builder: (_) => const KeywordScreen()));
+              final newStockAdded = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(builder: (_) => const KeywordScreen()),
+              );
               if (newStockAdded == true) {
                 _refresh();
               } else {
@@ -268,24 +282,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(Icons.refresh),
             onPressed: _refresh,
           ),
         ],
-        bottom: _stocks.isEmpty || _tabController == null
-            ? null
-            : TabBar(
-                controller: _tabController!,
-                isScrollable: true,
-                tabs: _stocks.map((s) => Tab(text: s.name)).toList(),
-              ),
       ),
-      body: _stocks.isEmpty || _tabController == null
+      body: _stocks.isEmpty
           ? const Center(child: Text('키워드를 추가해주세요'))
-          : TabBarView(
-              controller: _tabController!,
-              children: _stocks.map(_buildStockTab).toList(),
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  color: Colors.white,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: -4,
+                    children: _stocks.map((s) {
+                      final isSelected = s.name == _selectedStock;
+                      return ChoiceChip(
+                        label: Text(s.name),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() => _selectedStock = s.name);
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const Divider(height: 1, thickness: 1),
+                Expanded(child: _buildSelectedStockNews()),
+              ],
             ),
     );
   }

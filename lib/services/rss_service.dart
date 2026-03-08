@@ -14,32 +14,33 @@ class RssService {
     final allItems = <NewsItem>[];
     final seenLinks = <String>{};
 
-    // 제외 키워드 조립 (예: "-주가 -하락")
-    final exclusionStr = excludedKeywords.isEmpty
-        ? ''
-        : ' ${excludedKeywords.map((k) => '-$k').join(' ')}';
-
     for (final stock in stocks) {
       for (final keyword in stock.keywords) {
+        String searchQuery;
+
         if (allowedSources.isEmpty) {
-          // 언론사 지정이 없으면 (키워드 -제외단어) 검색
-          final searchQuery = '$keyword$exclusionStr';
-          final items = await _fetchByKeyword(searchQuery, stock.name);
-          for (final item in items) {
-            if (seenLinks.add(item.link)) {
-              allItems.add(item);
-            }
-          }
+          // 언론사 지정이 없으면
+          searchQuery = keyword;
         } else {
-          // 등록된 언론사가 있으면 언론사별로 "언론사명 키워드 -제외단어" 형태로 각각 검색 (Google RSS 버그 회피)
-          for (final source in allowedSources) {
-            final searchQuery = '$source $keyword$exclusionStr';
-            final items = await _fetchByKeyword(searchQuery, stock.name);
-            for (final item in items) {
-              if (seenLinks.add(item.link)) {
-                allItems.add(item);
-              }
-            }
+          // 등록된 언론사가 있으면 (언론사A OR 언론사B) 키워드 형태로 한 번에 검색
+          final sourcesQuery = allowedSources.join(' OR ');
+          searchQuery = '$keyword ($sourcesQuery)';
+        }
+
+        final items = await _fetchByKeyword(searchQuery, stock.name);
+
+        // 1회의 네트워크 응답을 받은 후, 내부(Dart) 로직으로 제외 키워드를 포함한 기사를 필터링
+        for (final item in items) {
+          if (excludedKeywords.isNotEmpty) {
+            final lowerTitle = item.title.toLowerCase();
+            final hasExcluded = excludedKeywords.any(
+              (ex) => lowerTitle.contains(ex.toLowerCase()),
+            );
+            if (hasExcluded) continue; // 제외어가 제목에 포함되어 있다면 스킵
+          }
+
+          if (seenLinks.add(item.link)) {
+            allItems.add(item);
           }
         }
       }
