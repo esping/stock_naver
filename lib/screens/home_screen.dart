@@ -267,31 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     size: 20,
                     color: Colors.indigo,
                   ),
-                  title: Row(
-                    children: [
-                      Text(_formatDateLabel(dateKey)),
-                      if (articles.any((a) => !_readLinks.contains(a.link)))
-                        Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'NEW',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  title: Text(_formatDateLabel(dateKey)),
                   trailing: Text(
                     '${articles.length}건',
                     style: const TextStyle(color: Colors.grey),
@@ -357,8 +333,40 @@ class _HomeScreenState extends State<HomeScreen> {
                     runSpacing: -4,
                     children: _stocks.map((s) {
                       final isSelected = s.name == _selectedStock;
+
+                      // 해당 종목의 전체 뉴스 중 안 읽은 기사가 있는지 검사
+                      final stockNews = _newsByStock[s.name] ?? [];
+                      final hasUnread = stockNews.any(
+                        (n) => !_readLinks.contains(n.link),
+                      );
+
                       return ChoiceChip(
-                        label: Text(s.name),
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(s.name),
+                            if (hasUnread)
+                              Container(
+                                margin: const EdgeInsets.only(left: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'NEW',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                         selected: isSelected,
                         onSelected: (selected) {
                           if (selected) {
