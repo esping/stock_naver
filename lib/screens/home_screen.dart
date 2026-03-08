@@ -398,9 +398,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         selected: isSelected,
                         onSelected: (selected) {
-                          if (selected) {
-                            setState(() => _selectedStock = s.name);
-                          }
+                          setState(() {
+                            _selectedStock = s.name;
+                            if (hasUnread) {
+                              for (final n in stockNews) {
+                                _readLinks.add(n.link);
+                              }
+                              StorageService.saveReadLinks(_readLinks);
+                            }
+                          });
                         },
                       );
                     }).toList(),
