@@ -31,10 +31,15 @@ void callbackDispatcher() {
 
     // 새 기사 집계 후 통합 알림 1건 (실제 저장된 기사 기준)
     final newArticles = mergedNews.where((n) => !prevTitles.contains(n.title)).toList();
-    final newKeywordCount = stocks
-        .where((s) => newArticles.any((n) => n.stockName == s.name))
-        .length;
-    await NotificationService.showSummary(newKeywordCount, newArticles.length);
+    
+    if (newArticles.isNotEmpty) {
+      final newArticleCounts = <String, int>{};
+      for (final article in newArticles) {
+        newArticleCounts[article.stockName] = 
+            (newArticleCounts[article.stockName] ?? 0) + 1;
+      }
+      await NotificationService.showSummary(newArticleCounts);
+    }
     return true;
   });
 }
