@@ -20,6 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Set<String> _readLinks = {};
   bool _loading = false;
   String? _selectedStock;
+  String? _lastRefreshTime;
 
   @override
   void initState() {
@@ -135,6 +136,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _newsByStock = byStock;
       _readLinks = readLinks;
       _loading = false;
+      
+      final dtNow = DateTime.now();
+      final lt = dtNow.toLocal();
+      _lastRefreshTime = '${lt.year}-${lt.month.toString().padLeft(2, '0')}-${lt.day.toString().padLeft(2, '0')} '
+          '${lt.hour.toString().padLeft(2, '0')}:${lt.minute.toString().padLeft(2, '0')}:${lt.second.toString().padLeft(2, '0')}';
 
       if (_selectedStock != null) {
         final stockNews = _newsByStock[_selectedStock] ?? [];
@@ -377,28 +383,50 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => _refresh(),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '전체',
-                  style: TextStyle(color: Theme.of(context).colorScheme.primary),
-                ),
-                const SizedBox(width: 4),
-                _loading
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      )
-                    : Icon(Icons.sync,
-                        color: Theme.of(context).colorScheme.primary, size: 20),
-              ],
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    height: 32,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      onPressed: () => _refresh(),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '전체',
+                            style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                          ),
+                          const SizedBox(width: 4),
+                          _loading
+                              ? SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                )
+                              : Icon(Icons.sync,
+                                  color: Theme.of(context).colorScheme.primary, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_lastRefreshTime != null)
+                    Text(
+                      _lastRefreshTime!,
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                ],
+              ),
             ),
           ),
         ],
