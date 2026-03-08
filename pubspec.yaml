@@ -1,4 +1,4 @@
-name: my_stock
+name: stock_naver
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -39,6 +39,7 @@ dependencies:
   workmanager: ^0.9.0+3
   url_launcher: ^6.3.1
   path_provider: ^2.1.5
+  html_unescape: ^2.0.0
 
 dev_dependencies:
   flutter_test:

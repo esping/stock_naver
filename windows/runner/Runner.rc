@@ -1,4 +1,4 @@
-// Microsoft Visual C++ generated resource script.
+﻿// Microsoft Visual C++ generated resource script.
 //
 #pragma code_page(65001)
 #include "resource.h"
@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.mystock" "\0"
-            VALUE "FileDescription", "my_stock" "\0"
+            VALUE "FileDescription", "stock_naver" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "my_stock" "\0"
+            VALUE "InternalName", "stock_naver" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.mystock. All rights reserved." "\0"
-            VALUE "OriginalFilename", "my_stock.exe" "\0"
-            VALUE "ProductName", "my_stock" "\0"
+            VALUE "OriginalFilename", "stock_naver.exe" "\0"
+            VALUE "ProductName", "stock_naver" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

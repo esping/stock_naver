@@ -10,9 +10,9 @@ const _bgTaskName = 'stockNewsRefresh';
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
-    // 휴면 시간 (02:00 ~ 08:00) 수집 건너뜀
+    // 휴면 시간 (02:00 ~ 07:00) 수집 건너뜀
     final hour = DateTime.now().hour;
-    if (hour >= 2 && hour < 8) return true;
+    if (hour >= 2 && hour < 7) return true;
 
     await NotificationService.init();
     final stocks = await StorageService.loadStocks();

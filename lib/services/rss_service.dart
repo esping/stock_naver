@@ -1,5 +1,6 @@
+import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:xml/xml.dart';
+import 'package:html_unescape/html_unescape.dart';
 import '../models/news_item.dart';
 import '../models/stock.dart';
 
@@ -23,9 +24,9 @@ class RssService {
           // 언론사 지정이 없으면
           searchQuery = keyword;
         } else {
-          // 등록된 언론사가 있으면 (언론사A OR 언론사B) 키워드 형태로 한 번에 검색
-          final sourcesQuery = allowedSources.join(' OR ');
-          searchQuery = '$keyword ($sourcesQuery)';
+          // 등록된 언론사가 있으면 네이버 문법( | )을 활용하여 다중 검색
+          final sourcesQuery = allowedSources.join('|');
+          searchQuery = '$keyword +($sourcesQuery)';
         }
 
         final items = await _fetchByKeyword(searchQuery, stock.name);
@@ -40,6 +41,13 @@ class RssService {
             if (hasExcluded) continue; // 제외어가 제목에 포함되어 있다면 스킵
           }
 
+          // Appended OR queries in Naver search already filter by newspaper name (e.g. '이데일리')
+          // However, our item.source extracts the domain (e.g. 'edaily.co.kr').
+          // To ensure we don't accidentally drop valid articles returned by Naver's advanced query,
+          // we only apply a strict domain filter if we couldn't append them cleanly.
+          // Since we are appending to the search query, we can trust Naver's result filtering more
+          // and skip the rigid domain check here if we used the advanced query.
+
           final titleKey = '${item.title}_${item.source}';
           if (seenLinks.add(item.link) && seenTitles.add(titleKey)) {
             allItems.add(item);
@@ -48,6 +56,10 @@ class RssService {
       }
     }
 
+    // Create a cutoff threshold of 24 hours ago (in UTC to match parsed HttpDates which return UTC)
+    final cutoff = DateTime.now().toUtc().subtract(const Duration(hours: 24));
+
+    allItems.removeWhere((item) => item.publishedAt.toUtc().isBefore(cutoff));
     allItems.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
     return allItems;
   }
@@ -57,34 +69,86 @@ class RssService {
     String stockName,
   ) async {
     final encodedKeyword = Uri.encodeComponent(keyword);
-    final url =
-        'https://news.google.com/rss/search?q=$encodedKeyword+when:8h&hl=ko&gl=KR&ceid=KR:ko';
+    final items = <NewsItem>[];
+    
+    // 1st page (items 1 to 100) sorted by similarity to prioritize most relevant news
+    final url1 = 'https://openapi.naver.com/v1/search/news.json?query=$encodedKeyword&display=100&start=1&sort=sim';
+        
     try {
-      final response = await http
-          .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 10));
-      if (response.statusCode != 200) return [];
-      return _parseRss(response.body, stockName);
+      final response1 = await http.get(
+        Uri.parse(url1),
+        headers: {
+          'X-Naver-Client-Id': '1bYt64mfI_HwbOP4oqai',
+          'X-Naver-Client-Secret': 'cJPqOkVZd6',
+        },
+      ).timeout(const Duration(seconds: 10));
+      
+      if (response1.statusCode == 200) {
+        items.addAll(_parseNaverJson(response1.body, stockName));
+        
+        try {
+          final decoded = jsonDecode(response1.body) as Map<String, dynamic>;
+          final total = decoded['total'] as int? ?? 0;
+          
+          // 2nd page (items 101 to 200) if more results exist
+          if (total > 100) {
+            final url2 = 'https://openapi.naver.com/v1/search/news.json?query=$encodedKeyword&display=100&start=101&sort=sim';
+            final response2 = await http.get(
+              Uri.parse(url2),
+              headers: {
+                'X-Naver-Client-Id': '1bYt64mfI_HwbOP4oqai',
+                'X-Naver-Client-Secret': 'cJPqOkVZd6',
+              },
+            ).timeout(const Duration(seconds: 10));
+            
+            if (response2.statusCode == 200) {
+              items.addAll(_parseNaverJson(response2.body, stockName));
+            }
+          }
+        } catch (e) {
+          print('Error checking total/fetching second page: $e');
+        }
+      }
     } catch (_) {
-      return [];
+      // Ignored
     }
+    
+    return items;
   }
 
-  static List<NewsItem> _parseRss(String xmlBody, String stockName) {
+  static List<NewsItem> _parseNaverJson(String jsonBody, String stockName) {
     final items = <NewsItem>[];
+    final unescape = HtmlUnescape();
+    
     try {
-      final document = XmlDocument.parse(xmlBody);
-      final entries = document.findAllElements('item');
+      final decoded = jsonDecode(jsonBody) as Map<String, dynamic>;
+      final jsonItems = decoded['items'] as List<dynamic>? ?? [];
 
-      for (final entry in entries) {
-        final title = entry.findElements('title').firstOrNull?.innerText ?? '';
-        final link = entry.findElements('link').firstOrNull?.innerText ?? '';
-        final pubDate =
-            entry.findElements('pubDate').firstOrNull?.innerText ?? '';
-        final source =
-            entry.findElements('source').firstOrNull?.innerText ?? '';
+      for (final entry in jsonItems) {
+        final rawTitle = entry['title']?.toString() ?? '';
+        final link = entry['link']?.toString() ?? '';
+        final pubDate = entry['pubDate']?.toString() ?? '';
+        
+        final originalLink = entry['originallink']?.toString() ?? '';
+        
+        // Extract a simple domain name from originalLink to represent the source
+        String source = '';
+        if (originalLink.isNotEmpty) {
+          try {
+            final uri = Uri.parse(originalLink);
+            source = uri.host.replaceFirst('www.', '');
+          } catch (_) {}
+        }
 
-        if (title.isEmpty || link.isEmpty) continue;
+        if (source.isEmpty) {
+          source = 'Naver News';
+        }
+
+        if (rawTitle.isEmpty || link.isEmpty) continue;
+
+        // Strip HTML tags from title (e.g. <b>주식</b> -> 주식) and unescape
+        var title = rawTitle.replaceAll(RegExp(r'<[^>]*>'), '');
+        title = unescape.convert(title);
 
         items.add(
           NewsItem(
@@ -96,7 +160,9 @@ class RssService {
           ),
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      print('Naver API parsing error: $e');
+    }
     return items;
   }
 

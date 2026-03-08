@@ -1,4 +1,4 @@
-# my_stock
+﻿# stock_naver
 
 A new Flutter project.
 

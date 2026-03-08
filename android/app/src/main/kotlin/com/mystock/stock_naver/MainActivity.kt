@@ -1,4 +1,4 @@
-package com.mystock.my_stock
+﻿package com.mystock.stock_naver
 
 import io.flutter.embedding.android.FlutterActivity
 

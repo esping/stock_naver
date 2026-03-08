@@ -50,16 +50,19 @@ class _HomeScreenState extends State<HomeScreen> {
       _newsByStock = byStock;
       _readLinks = readLinks;
       if (_stocks.isNotEmpty && _selectedStock == null) {
-        _selectedStock = _stocks.first.name;
+        _selectedStock = '__ALL__';
       } else if (_stocks.isNotEmpty &&
+          _selectedStock != '__ALL__' &&
           !_stocks.any((s) => s.name == _selectedStock)) {
-        _selectedStock = _stocks.first.name;
+        _selectedStock = '__ALL__';
       } else if (_stocks.isEmpty) {
         _selectedStock = null;
       }
 
       if (_selectedStock != null) {
-        final stockNews = _newsByStock[_selectedStock] ?? [];
+        final stockNews = _selectedStock == '__ALL__'
+            ? _newsByStock.values.expand((v) => v).toList()
+            : _newsByStock[_selectedStock] ?? [];
         bool hasUnread = false;
         for (final n in stockNews) {
           if (_readLinks.add(n.link)) {
@@ -143,7 +146,9 @@ class _HomeScreenState extends State<HomeScreen> {
           '${lt.hour.toString().padLeft(2, '0')}:${lt.minute.toString().padLeft(2, '0')}:${lt.second.toString().padLeft(2, '0')}';
 
       if (_selectedStock != null) {
-        final stockNews = _newsByStock[_selectedStock] ?? [];
+        final stockNews = _selectedStock == '__ALL__'
+            ? _newsByStock.values.expand((v) => v).toList()
+            : _newsByStock[_selectedStock] ?? [];
         bool hasUnread = false;
         for (final n in stockNews) {
           if (_readLinks.add(n.link)) {
@@ -260,11 +265,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return const Center(child: Text('키워드를 추가해주세요'));
     }
 
-    final stock = _stocks.firstWhere(
-      (s) => s.name == _selectedStock,
-      orElse: () => _stocks.first,
-    );
-    final news = _newsByStock[stock.name] ?? [];
+    final news = _selectedStock == '__ALL__'
+        ? _newsByStock.values.expand((v) => v).toList()
+        : _newsByStock[_selectedStock] ?? [];
 
     // 날짜별 그룹화
     final groupedByDate = <String, List<NewsItem>>{};
@@ -277,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return RefreshIndicator(
       onRefresh: () async {
-        if (_selectedStock != null) {
+        if (_selectedStock != null && _selectedStock != '__ALL__') {
           final target = _stocks.firstWhere((s) => s.name == _selectedStock);
           await _refresh(targetStock: target);
         } else {
@@ -287,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          // 날짜별 기사 섹션 & 종목 새로고침 버튼
+          // 날짜별 기사 섹션 & 주제 새로고침 버튼
           Row(
             children: [
               const Text(
@@ -299,9 +302,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const Spacer(),
-              if (_selectedStock != null)
+              if (_selectedStock != null && _selectedStock != '__ALL__')
                 IconButton(
-                  tooltip: '현재 종목 새로고침',
+                  tooltip: '현재 주제 새로고침',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   iconSize: 20,
@@ -347,8 +350,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     '${articles.length}건',
                     style: const TextStyle(color: Colors.grey),
                   ),
-                  onTap: () =>
-                      _showArticlesByDate(stock.name, dateKey, articles),
+                  onTap: () {
+                    final targetStockName = _selectedStock == '__ALL__' 
+                        ? '전체 주제' // Display aggregate label if "All" is selected
+                        : _selectedStock!;
+                    _showArticlesByDate(targetStockName, dateKey, articles);
+                  },
                 ),
               );
             }),
@@ -445,10 +452,61 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Wrap(
                     spacing: 8,
                     runSpacing: -4,
-                    children: _stocks.map((s) {
+                    children: [
+                      // "전체" (All) Tab
+                      Builder(builder: (context) {
+                        final isSelected = _selectedStock == '__ALL__';
+                        // Check if any stock has unread news to show NEW badge on All tab
+                        final hasUnread = _newsByStock.values
+                            .expand((newsList) => newsList)
+                            .any((n) => !_readLinks.contains(n.link));
+
+                        return ChoiceChip(
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('전체'),
+                              if (hasUnread)
+                                Container(
+                                  margin: const EdgeInsets.only(left: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'NEW',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setState(() {
+                              _selectedStock = '__ALL__';
+                              if (hasUnread) {
+                                final allNews = _newsByStock.values.expand((v) => v);
+                                for (final n in allNews) {
+                                  _readLinks.add(n.link);
+                                }
+                                StorageService.saveReadLinks(_readLinks);
+                              }
+                            });
+                          },
+                        );
+                      }),
+                      ..._stocks.map((s) {
                       final isSelected = s.name == _selectedStock;
 
-                      // 해당 종목의 전체 뉴스 중 안 읽은 기사가 있는지 검사
+                      // 해당 주제의 전체 뉴스 중 안 읽은 기사가 있는지 검사
                       final stockNews = _newsByStock[s.name] ?? [];
                       final hasUnread = stockNews.any(
                         (n) => !_readLinks.contains(n.link),
@@ -494,7 +552,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           });
                         },
                       );
-                    }).toList(),
+                    })],
                   ),
                 ),
                 const Divider(height: 1, thickness: 1),

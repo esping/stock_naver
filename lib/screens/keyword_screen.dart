@@ -97,11 +97,11 @@ class _KeywordScreenState extends State<KeywordScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('종목 추가'),
+        title: const Text('주제 추가'),
         content: TextField(
           controller: nameCtrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: '종목명 (예: 카카오)'),
+          decoration: const InputDecoration(hintText: '주제명 (예: 카카오, 인공지능)'),
           onSubmitted: (v) {
             final name = v.trim();
             if (name.isEmpty) return;
@@ -141,7 +141,7 @@ class _KeywordScreenState extends State<KeywordScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('${_stocks[index].name} 삭제'),
-        content: const Text('이 종목을 삭제하시겠습니까?'),
+        content: const Text('이 주제를 삭제하시겠습니까?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -395,7 +395,7 @@ class _KeywordScreenState extends State<KeywordScreen> {
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Text(
-                '종목 관리',
+                '주제 관리',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -404,7 +404,7 @@ class _KeywordScreenState extends State<KeywordScreen> {
               ),
             ),
 
-            // 종목 목록
+            // 주제 목록
             ...List.generate(_stocks.length, (stockIndex) {
               final stock = _stocks[stockIndex];
               return Card(
