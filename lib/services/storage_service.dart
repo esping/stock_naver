@@ -77,6 +77,12 @@ class StorageService {
 
   // 뉴스 불러오기 (특정 날짜 범위가 주어지지 않으면 전체 파일 읽기)
   static Future<List<NewsItem>> loadNews({List<String>? targetDates}) async {
+    // [레거시 데이터 청소] 이전 버전에 쓰이던 단일 String _newsKey 삭제
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey('saved_news')) {
+      await prefs.remove('saved_news');
+    }
+
     final newsDir = await _getNewsDir();
     final dir = Directory(newsDir);
     if (!await dir.exists()) return [];
