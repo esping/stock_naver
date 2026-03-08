@@ -56,6 +56,19 @@ class _HomeScreenState extends State<HomeScreen> {
       } else if (_stocks.isEmpty) {
         _selectedStock = null;
       }
+
+      if (_selectedStock != null) {
+        final stockNews = _newsByStock[_selectedStock] ?? [];
+        bool hasUnread = false;
+        for (final n in stockNews) {
+          if (_readLinks.add(n.link)) {
+            hasUnread = true;
+          }
+        }
+        if (hasUnread) {
+          StorageService.saveReadLinks(_readLinks);
+        }
+      }
     });
   }
 
@@ -99,14 +112,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final newArticles = mergedNews
         .where((n) => !prevTitles.contains(n.title))
         .toList();
-    final newKeywordCount = allStocks
-        .where((s) => newArticles.any((n) => n.stockName == s.name))
-        .length;
+    
     if (newArticles.isNotEmpty) {
-      await NotificationService.showSummary(
-        newKeywordCount,
-        newArticles.length,
-      );
+      final newArticleCounts = <String, int>{};
+      for (final article in newArticles) {
+        newArticleCounts[article.stockName] = 
+            (newArticleCounts[article.stockName] ?? 0) + 1;
+      }
+      await NotificationService.showSummary(newArticleCounts);
     }
 
     final byStock = <String, List<NewsItem>>{};
@@ -121,6 +134,19 @@ class _HomeScreenState extends State<HomeScreen> {
       _newsByStock = byStock;
       _readLinks = readLinks;
       _loading = false;
+
+      if (_selectedStock != null) {
+        final stockNews = _newsByStock[_selectedStock] ?? [];
+        bool hasUnread = false;
+        for (final n in stockNews) {
+          if (_readLinks.add(n.link)) {
+            hasUnread = true;
+          }
+        }
+        if (hasUnread) {
+          StorageService.saveReadLinks(_readLinks);
+        }
+      }
     });
   }
 
@@ -254,14 +280,42 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          // 날짜별 기사 섹션
-          const Text(
-            '날짜별 기사',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
+          // 날짜별 기사 섹션 & 종목 새로고침 버튼
+          Row(
+            children: [
+              const Text(
+                '날짜별 기사',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+              const Spacer(),
+              if (_selectedStock != null)
+                IconButton(
+                  tooltip: '현재 종목 새로고침',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  iconSize: 20,
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.grey,
+                          ),
+                        )
+                      : const Icon(Icons.refresh, color: Colors.grey),
+                  onPressed: () {
+                    final target = _stocks.firstWhere(
+                      (s) => s.name == _selectedStock,
+                    );
+                    _refresh(targetStock: target);
+                  },
+                ),
+            ],
           ),
           const SizedBox(height: 8),
 
@@ -316,33 +370,22 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
           ),
-          IconButton(
-            tooltip: '현재 종목 새로고침',
+          TextButton.icon(
+            onPressed: () => _refresh(),
             icon: _loading
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
+                    width: 16,
+                    height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       color: Colors.white,
                     ),
                   )
-                : const Icon(Icons.refresh),
-            onPressed: () {
-              if (_selectedStock != null) {
-                final target = _stocks.firstWhere(
-                  (s) => s.name == _selectedStock,
-                );
-                _refresh(targetStock: target);
-              }
-            },
-          ),
-          IconButton(
-            tooltip: '전체 새로고침',
-            icon: _loading
-                ? const SizedBox(width: 20, height: 20)
-                : const Icon(Icons.sync),
-            onPressed: () => _refresh(),
+                : const Icon(Icons.sync, color: Colors.white, size: 20),
+            label: const Text(
+              '전체',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),

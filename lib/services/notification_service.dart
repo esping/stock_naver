@@ -10,24 +10,34 @@ class NotificationService {
   }
 
   // 새 기사가 있을 때만 통합 알림 1건 발송
-  // keywordCount: 새 기사가 있는 키워드(종목) 수, articleCount: 전체 새 기사 수
-  static Future<void> showSummary(int keywordCount, int articleCount) async {
-    if (articleCount == 0) return;
+  static Future<void> showSummary(Map<String, int> newArticleCounts) async {
+    if (newArticleCounts.isEmpty) return;
 
-    const details = NotificationDetails(
+    final totalCount = newArticleCounts.values.fold(0, (sum, count) => sum + count);
+    final message = newArticleCounts.entries
+        .map((e) => '[${e.key}] ${e.value}건')
+        .join('\n');
+
+    final bigTextStyle = BigTextStyleInformation(
+      message,
+      contentTitle: '내 주식 뉴스 ($totalCount건 수집)',
+    );
+
+    final details = NotificationDetails(
       android: AndroidNotificationDetails(
         'stock_news',
         '주식 뉴스',
         channelDescription: '보유 종목 뉴스 알림',
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
+        styleInformation: bigTextStyle,
       ),
     );
 
     await _plugin.show(
       0,
-      '내 주식 뉴스',
-      '$keywordCount개 종목, $articleCount개 기사 수집',
+      '내 주식 뉴스 ($totalCount건 수집)',
+      message,
       details,
     );
   }

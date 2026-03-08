@@ -117,7 +117,7 @@ class StorageService {
   static Future<Set<String>> loadAllowedSources() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList(_allowedSourcesKey);
-    return saved?.toSet() ?? {'한국경제', '매일경제'};
+    return saved?.toSet() ?? {'한국경제', '매일경제', '서울경제'};
   }
 
   static Future<void> saveAllowedSources(Set<String> sources) async {
@@ -161,7 +161,7 @@ class StorageService {
     final seenLinks = <String>{};
     final seenTitles = <String>{};
 
-    return [...fresh, ...prev].where((n) {
+    return [...prev, ...fresh].where((n) {
       final titleKey = '${n.title}_${n.source}';
       if (!seenLinks.add(n.link)) return false;
       if (!seenTitles.add(titleKey)) return false;
