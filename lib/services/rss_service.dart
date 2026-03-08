@@ -13,6 +13,7 @@ class RssService {
 
     final allItems = <NewsItem>[];
     final seenLinks = <String>{};
+    final seenTitles = <String>{};
 
     for (final stock in stocks) {
       for (final keyword in stock.keywords) {
@@ -39,7 +40,8 @@ class RssService {
             if (hasExcluded) continue; // 제외어가 제목에 포함되어 있다면 스킵
           }
 
-          if (seenLinks.add(item.link)) {
+          final titleKey = '${item.title}_${item.source}';
+          if (seenLinks.add(item.link) && seenTitles.add(titleKey)) {
             allItems.add(item);
           }
         }

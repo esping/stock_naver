@@ -82,11 +82,16 @@ class StorageService {
   }) {
     final cutoff = DateTime.now().subtract(const Duration(days: 30));
     final seenLinks = <String>{};
+    final seenTitles = <String>{};
+
     return [...fresh, ...prev].where((n) {
+      final titleKey = '${n.title}_${n.source}';
       if (!seenLinks.add(n.link)) return false;
+      if (!seenTitles.add(titleKey)) return false;
       if (!n.publishedAt.isAfter(cutoff)) return false;
-      if (allowedSources.isNotEmpty && !allowedSources.contains(n.source))
+      if (allowedSources.isNotEmpty && !allowedSources.contains(n.source)) {
         return false;
+      }
       return true;
     }).toList()..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
   }
