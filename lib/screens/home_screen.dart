@@ -59,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({Stock? targetStock}) async {
     if (_loading) return;
     setState(() => _loading = true);
 
@@ -71,7 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
         '${dtYesterday.year}-${dtYesterday.month.toString().padLeft(2, '0')}-${dtYesterday.day.toString().padLeft(2, '0')}';
 
     // 중복 체크를 위해 전체가 아닌 어제와 오늘의 기사만 로드
-    final stocks = await StorageService.loadStocks();
+    final allStocks = await StorageService.loadStocks();
+    final stocksToFetch = targetStock != null ? [targetStock] : allStocks;
+
     final prevNews = await StorageService.loadNews(
       targetDates: [dateToday, dateYesterday],
     );
@@ -81,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final allowedSources = await StorageService.loadAllowedSources();
     final excludedKeywords = await StorageService.loadExcludedKeywords();
     final freshNews = await RssService.fetchAllNews(
-      stocks,
+      stocksToFetch,
       allowedSources: allowedSources,
       excludedKeywords: excludedKeywords,
     );
@@ -97,20 +99,25 @@ class _HomeScreenState extends State<HomeScreen> {
     final newArticles = mergedNews
         .where((n) => !prevTitles.contains(n.title))
         .toList();
-    final newKeywordCount = stocks
+    final newKeywordCount = allStocks
         .where((s) => newArticles.any((n) => n.stockName == s.name))
         .length;
-    await NotificationService.showSummary(newKeywordCount, newArticles.length);
+    if (newArticles.isNotEmpty) {
+      await NotificationService.showSummary(
+        newKeywordCount,
+        newArticles.length,
+      );
+    }
 
     final byStock = <String, List<NewsItem>>{};
-    for (final stock in stocks) {
+    for (final stock in allStocks) {
       byStock[stock.name] = mergedNews
           .where((n) => n.stockName == stock.name)
           .toList();
     }
 
     setState(() {
-      _stocks = stocks;
+      _stocks = allStocks;
       _newsByStock = byStock;
       _readLinks = readLinks;
       _loading = false;
@@ -236,7 +243,14 @@ class _HomeScreenState extends State<HomeScreen> {
       ..sort((a, b) => b.compareTo(a));
 
     return RefreshIndicator(
-      onRefresh: _refresh,
+      onRefresh: () async {
+        if (_selectedStock != null) {
+          final target = _stocks.firstWhere((s) => s.name == _selectedStock);
+          await _refresh(targetStock: target);
+        } else {
+          await _refresh();
+        }
+      },
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
@@ -303,6 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           IconButton(
+            tooltip: '현재 종목 새로고침',
             icon: _loading
                 ? const SizedBox(
                     width: 20,
@@ -313,7 +328,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   )
                 : const Icon(Icons.refresh),
-            onPressed: _refresh,
+            onPressed: () {
+              if (_selectedStock != null) {
+                final target = _stocks.firstWhere(
+                  (s) => s.name == _selectedStock,
+                );
+                _refresh(targetStock: target);
+              }
+            },
+          ),
+          IconButton(
+            tooltip: '전체 새로고침',
+            icon: _loading
+                ? const SizedBox(width: 20, height: 20)
+                : const Icon(Icons.sync),
+            onPressed: () => _refresh(),
           ),
         ],
       ),
