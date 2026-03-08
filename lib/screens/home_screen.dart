@@ -122,9 +122,10 @@ class _HomeScreenState extends State<HomeScreen> {
       await NotificationService.showSummary(newArticleCounts);
     }
 
+    final allSavedNews = await StorageService.loadNews();
     final byStock = <String, List<NewsItem>>{};
     for (final stock in allStocks) {
-      byStock[stock.name] = mergedNews
+      byStock[stock.name] = allSavedNews
           .where((n) => n.stockName == stock.name)
           .toList();
     }
