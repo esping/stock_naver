@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/stock.dart';
 import '../models/news_item.dart';
 
 class StorageService {
   static const _stocksKey = 'stocks_list';
-  static const _newsKey = 'saved_news';
   static const _allowedSourcesKey = 'allowed_sources'; // 허용된 언론사 목록
   static const _excludedKeywordsKey = 'excluded_keywords'; // 제외 키워드 목록
 
@@ -27,27 +28,82 @@ class StorageService {
     );
   }
 
-  // 뉴스 저장 (최대 5000개: 개수 초과 시 가장 오래된 데이터부터 삭제)
-  static Future<void> saveNews(List<NewsItem> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    // items는 이미 최신순(내림차순)으로 정렬되어 있으므로,
-    // take(5000)을 하면 최신 5000개만 유지되고 가장 오래된 데이터가 자연스럽게 삭제됩니다.
-    final limited = items.take(5000).toList();
-    await prefs.setString(
-      _newsKey,
-      jsonEncode(limited.map((n) => n.toJson()).toList()),
-    );
+  static Future<String> _getNewsDir() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final newsDir = Directory('${dir.path}/news');
+    if (!await newsDir.exists()) {
+      await newsDir.create(recursive: true);
+    }
+    return newsDir.path;
   }
 
-  // 뉴스 불러오기
-  static Future<List<NewsItem>> loadNews() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_newsKey);
-    if (raw == null) return [];
-    final list = jsonDecode(raw) as List;
-    return list
-        .map((e) => NewsItem.fromJson(e as Map<String, dynamic>))
-        .toList();
+  // 뉴스 저장 (날짜별 분할 파일 형태, 30일 경과 파일 삭제)
+  static Future<void> saveNews(List<NewsItem> items) async {
+    final newsDir = await _getNewsDir();
+
+    // 날짜별 그룹화 (YYYY-MM-DD 형식)
+    final byDate = <String, List<NewsItem>>{};
+    for (final item in items) {
+      final dt = item.publishedAt.toLocal();
+      final dateKey =
+          '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      byDate.putIfAbsent(dateKey, () => []).add(item);
+    }
+
+    // 각 그룹별 파일 쓰기 (기존 5000개 수량 제한 해제)
+    for (final entry in byDate.entries) {
+      final file = File('$newsDir/${entry.key}.json');
+      await file.writeAsString(
+        jsonEncode(entry.value.map((n) => n.toJson()).toList()),
+      );
+    }
+
+    // 30일 경과 파일 자동 정리
+    final cutoff = DateTime.now().subtract(const Duration(days: 30));
+    final dir = Directory(newsDir);
+    final files = dir.listSync();
+    for (final file in files) {
+      if (file is File && file.path.endsWith('.json')) {
+        final filename = file.uri.pathSegments.last.replaceAll('.json', '');
+        try {
+          final fileDate = DateTime.parse(filename);
+          if (fileDate.isBefore(cutoff)) {
+            await file.delete();
+          }
+        } catch (_) {} // 파일명 파싱 실패 시 무시
+      }
+    }
+  }
+
+  // 뉴스 불러오기 (특정 날짜 범위가 주어지지 않으면 전체 파일 읽기)
+  static Future<List<NewsItem>> loadNews({List<String>? targetDates}) async {
+    final newsDir = await _getNewsDir();
+    final dir = Directory(newsDir);
+    if (!await dir.exists()) return [];
+
+    final allItems = <NewsItem>[];
+    final files = dir.listSync();
+
+    for (final file in files) {
+      if (file is File && file.path.endsWith('.json')) {
+        final filename = file.uri.pathSegments.last.replaceAll('.json', '');
+
+        if (targetDates != null && !targetDates.contains(filename)) {
+          continue; // 타겟 날짜 목록이 있고, 현재 파일이 속하지 않으면 스킵
+        }
+
+        try {
+          final raw = await file.readAsString();
+          final list = jsonDecode(raw) as List;
+          allItems.addAll(
+            list.map((e) => NewsItem.fromJson(e as Map<String, dynamic>)),
+          );
+        } catch (_) {}
+      }
+    }
+
+    allItems.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    return allItems;
   }
 
   // ── 언론사/제외키워드 관리 ──────────────────────────
@@ -113,33 +169,39 @@ class StorageService {
 
   // ── 고아 기사 정리 (종목/키워드 삭제 시 호출) ─────────────────────
   static Future<void> cleanUpOrphanedNews(List<Stock> currentStocks) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_newsKey);
-    if (raw == null) return;
+    final newsDir = await _getNewsDir();
+    final dir = Directory(newsDir);
+    if (!await dir.exists()) return;
 
-    final list = jsonDecode(raw) as List;
-    final allNews = list
-        .map((e) => NewsItem.fromJson(e as Map<String, dynamic>))
-        .toList();
-
-    // 현재 저장된 모든(종목명 + 개별키워드) 허용 검색어 풀 생성
-    // (뉴스는 stockName이 종목명, 검색당시 keyword를 명시적으로 가지고 있지 않으므로
-    // 최소한 stockName은 현재 종목 리스트 안에 존재해야 함)
     final validStockNames = currentStocks.map((s) => s.name).toSet();
+    final files = dir.listSync();
 
-    final filteredNews = allNews.where((news) {
-      if (!validStockNames.contains(news.stockName)) {
-        return false;
+    for (final file in files) {
+      if (file is File && file.path.endsWith('.json')) {
+        try {
+          final raw = await file.readAsString();
+          final list = jsonDecode(raw) as List;
+          final allNews = list
+              .map((e) => NewsItem.fromJson(e as Map<String, dynamic>))
+              .toList();
+
+          final filteredNews = allNews.where((news) {
+            return validStockNames.contains(news.stockName);
+          }).toList();
+
+          // 삭제된 기사가 있어서 파일 내용이 변했다면 덮어쓰기, 아예 다 지워졌으면 파일 삭제
+          if (filteredNews.length != allNews.length) {
+            if (filteredNews.isEmpty) {
+              await file.delete();
+            } else {
+              await file.writeAsString(
+                jsonEncode(filteredNews.map((n) => n.toJson()).toList()),
+              );
+            }
+          }
+        } catch (_) {}
       }
-      return true;
-    }).toList();
-
-    // 정리된 뉴스 목록을 상한에 맞게 다시 저장
-    final limited = filteredNews.take(5000).toList();
-    await prefs.setString(
-      _newsKey,
-      jsonEncode(limited.map((n) => n.toJson()).toList()),
-    );
+    }
   }
 
   static List<Stock> _defaultStocks() => [

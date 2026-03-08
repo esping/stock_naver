@@ -63,8 +63,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_loading) return;
     setState(() => _loading = true);
 
+    final dtNow = DateTime.now();
+    final dtYesterday = dtNow.subtract(const Duration(days: 1));
+    final dateToday =
+        '${dtNow.year}-${dtNow.month.toString().padLeft(2, '0')}-${dtNow.day.toString().padLeft(2, '0')}';
+    final dateYesterday =
+        '${dtYesterday.year}-${dtYesterday.month.toString().padLeft(2, '0')}-${dtYesterday.day.toString().padLeft(2, '0')}';
+
+    // 중복 체크를 위해 전체가 아닌 어제와 오늘의 기사만 로드
     final stocks = await StorageService.loadStocks();
-    final prevNews = await StorageService.loadNews();
+    final prevNews = await StorageService.loadNews(
+      targetDates: [dateToday, dateYesterday],
+    );
     final readLinks = await StorageService.loadReadLinks();
     final prevTitles = prevNews.map((n) => n.title).toSet();
 
