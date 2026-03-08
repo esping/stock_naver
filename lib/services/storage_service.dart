@@ -117,7 +117,18 @@ class StorageService {
   static Future<Set<String>> loadAllowedSources() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList(_allowedSourcesKey);
-    return saved?.toSet() ?? {'한국경제', '매일경제', '서울경제'};
+    return saved?.toSet() ?? {
+      '서울경제',
+      '매일경제',
+      '한국경제',
+      '연합뉴스',
+      '뉴시스',
+      '머니투데이',
+      '이데일리',
+      '이코노미스트',
+      '이투데이',
+      '파이낸셜뉴스',
+    };
   }
 
   static Future<void> saveAllowedSources(Set<String> sources) async {
@@ -151,6 +162,41 @@ class StorageService {
     await prefs.setStringList('read_links', limitedLinks.toList());
   }
 
+  // 한글 언론사명 → 도메인 키워드 매핑
+  // n.source 는 originallink 에서 추출한 도메인 (예: hankyung.com)
+  static const Map<String, List<String>> _sourceDomainKeywords = {
+    '한국경제': ['hankyung'],
+    '매일경제': ['mk.co.kr', 'maeil'],
+    '서울경제': ['sedaily'],
+    '연합뉴스': ['yna.co.kr', 'yonhap'],
+    '뉴시스': ['newsis'],
+    '머니투데이': ['mt.co.kr'],
+    '이데일리': ['edaily'],
+    '이코노미스트': ['economist.co.kr'],
+    '이투데이': ['etoday.co.kr'],
+    '파이낸셜뉴스': ['fnnews'],
+    '조선일보': ['chosun'],
+    '중앙일보': ['joongang'],
+    '동아일보': ['donga.com'],
+    '헤럴드경제': ['heraldcorp'],
+    '아시아경제': ['asiae'],
+    '뉴스1': ['news1.kr'],
+    '한겨레': ['hani.co.kr'],
+    '경향신문': ['khan.co.kr'],
+    '전자신문': ['etnews'],
+    '디지털타임스': ['dt.co.kr'],
+  };
+
+  /// 한글 언론사명이 도메인에 포함되는지 확인
+  static bool _matchesSource(String domain, String koreanName) {
+    final keywords = _sourceDomainKeywords[koreanName];
+    if (keywords == null) {
+      // 매핑 없으면 한글명을 소문자로 변환해 도메인에서 부분 검색 (fallback)
+      return domain.contains(koreanName.toLowerCase());
+    }
+    return keywords.any((kw) => domain.contains(kw));
+  }
+
   // ── 뉴스 데이터 (로컬 캐싱) ──────────────────────────병합: 중복 제거 + 30일 이내 + 언론사 화이트리스트
   static List<NewsItem> mergeAndFilter(
     List<NewsItem> fresh,
@@ -166,7 +212,9 @@ class StorageService {
       if (!seenLinks.add(n.link)) return false;
       if (!seenTitles.add(titleKey)) return false;
       if (!n.publishedAt.isAfter(cutoff)) return false;
-      if (allowedSources.isNotEmpty && !allowedSources.contains(n.source)) {
+      // 도메인 기반 언론사 필터: 한글명 → 도메인 키워드 매핑으로 비교
+      if (allowedSources.isNotEmpty &&
+          !allowedSources.any((src) => _matchesSource(n.source, src))) {
         return false;
       }
       return true;
