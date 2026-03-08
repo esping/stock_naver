@@ -74,6 +74,21 @@ class StorageService {
     await prefs.setStringList(_excludedKeywordsKey, keywords.toList());
   }
 
+  static Future<Set<String>> loadReadLinks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList('read_links');
+    return saved?.toSet() ?? {};
+  }
+
+  static Future<void> saveReadLinks(Set<String> links) async {
+    final prefs = await SharedPreferences.getInstance();
+    // 5000개 제한을 뉴스 최대 저장량과 동일하게 유지
+    final limitedLinks = links.length > 5000
+        ? links.toList().sublist(links.length - 5000).toSet()
+        : links;
+    await prefs.setStringList('read_links', limitedLinks.toList());
+  }
+
   // ── 뉴스 데이터 (로컬 캐싱) ──────────────────────────병합: 중복 제거 + 30일 이내 + 언론사 화이트리스트
   static List<NewsItem> mergeAndFilter(
     List<NewsItem> fresh,

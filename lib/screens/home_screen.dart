@@ -17,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<Stock> _stocks = [];
   Map<String, List<NewsItem>> _newsByStock = {};
+  Set<String> _readLinks = {};
   bool _loading = false;
   String? _selectedStock;
 
@@ -34,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadData() async {
     final stocks = await StorageService.loadStocks();
     final savedNews = await StorageService.loadNews();
+    final readLinks = await StorageService.loadReadLinks();
 
     final byStock = <String, List<NewsItem>>{};
     for (final stock in stocks) {
@@ -45,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _stocks = stocks;
       _newsByStock = byStock;
+      _readLinks = readLinks;
       if (_stocks.isNotEmpty && _selectedStock == null) {
         _selectedStock = _stocks.first.name;
       } else if (_stocks.isNotEmpty &&
@@ -62,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final stocks = await StorageService.loadStocks();
     final prevNews = await StorageService.loadNews();
+    final readLinks = await StorageService.loadReadLinks();
     final prevTitles = prevNews.map((n) => n.title).toSet();
 
     final allowedSources = await StorageService.loadAllowedSources();
@@ -98,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _stocks = stocks;
       _newsByStock = byStock;
+      _readLinks = readLinks;
       _loading = false;
     });
   }
@@ -129,6 +134,17 @@ class _HomeScreenState extends State<HomeScreen> {
     String dateKey,
     List<NewsItem> articles,
   ) {
+    bool hasNew = false;
+    for (final item in articles) {
+      if (_readLinks.add(item.link)) {
+        hasNew = true;
+      }
+    }
+    if (hasNew) {
+      setState(() {});
+      StorageService.saveReadLinks(_readLinks);
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -241,7 +257,31 @@ class _HomeScreenState extends State<HomeScreen> {
                     size: 20,
                     color: Colors.indigo,
                   ),
-                  title: Text(_formatDateLabel(dateKey)),
+                  title: Row(
+                    children: [
+                      Text(_formatDateLabel(dateKey)),
+                      if (articles.any((a) => !_readLinks.contains(a.link)))
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'NEW',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                   trailing: Text(
                     '${articles.length}건',
                     style: const TextStyle(color: Colors.grey),
