@@ -58,7 +58,7 @@ class RssService {
   ) async {
     final encodedKeyword = Uri.encodeComponent(keyword);
     final url =
-        'https://news.google.com/rss/search?q=$encodedKeyword+when:1d&hl=ko&gl=KR&ceid=KR:ko';
+        'https://news.google.com/rss/search?q=$encodedKeyword+when:8h&hl=ko&gl=KR&ceid=KR:ko';
     try {
       final response = await http
           .get(Uri.parse(url))

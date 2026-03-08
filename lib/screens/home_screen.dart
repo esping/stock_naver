@@ -355,37 +355,50 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('내 주식 뉴스'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('내 주식 뉴스'),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () async {
+                final newStockAdded = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const KeywordScreen()),
+                );
+                if (newStockAdded == true) {
+                  _refresh();
+                } else {
+                  _loadData();
+                }
+              },
+            ),
+          ],
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () async {
-              final newStockAdded = await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(builder: (_) => const KeywordScreen()),
-              );
-              if (newStockAdded == true) {
-                _refresh();
-              } else {
-                _loadData();
-              }
-            },
-          ),
-          TextButton.icon(
+          TextButton(
             onPressed: () => _refresh(),
-            icon: _loading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.sync, color: Colors.white, size: 20),
-            label: const Text(
-              '전체',
-              style: TextStyle(color: Colors.white),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '전체',
+                  style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                ),
+                const SizedBox(width: 4),
+                _loading
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      )
+                    : Icon(Icons.sync,
+                        color: Theme.of(context).colorScheme.primary, size: 20),
+              ],
             ),
           ),
         ],
